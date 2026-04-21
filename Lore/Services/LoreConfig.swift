@@ -14,7 +14,7 @@ enum LoreConfig {
     "google/gemini-2.5-flash",
   ]
 
-  static let httpReferer = "https://github.com/Savar-G/Lore"
+  static let httpReferer = "https://github.com/Savar-G/meta-wearables-lore"
   static let appTitle = "Lore"
 
   static let systemPrompt = """
