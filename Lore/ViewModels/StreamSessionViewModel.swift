@@ -29,12 +29,15 @@ final class StreamSessionViewModel: ObservableObject {
   @Published var errorMessage: String = ""
 
   @Published var capturedPhoto: UIImage?
-  @Published var showPhotoPreview: Bool = false
   @Published var showPhotoCaptureError: Bool = false
   @Published var isCapturingPhoto: Bool = false
 
   @Published var hasActiveDevice: Bool = false
   @Published var isDeviceSessionReady: Bool = false
+
+  // Lore pipeline state — exposed for the overlay UI
+  @Published var loreState: LoreFlowState = .idle
+  let loreSpeaker = LoreSpeaker()
 
   var isStreaming: Bool { streamingStatus != .stopped }
 
@@ -44,6 +47,9 @@ final class StreamSessionViewModel: ObservableObject {
   private let wearables: WearablesInterface
   private var streamSession: StreamSession?
   private var cancellables = Set<AnyCancellable>()
+  private let loreService = LoreService()
+  private var lastPhotoData: Data?
+  private var activeLoreTask: Task<Void, Never>?
 
   private var stateListenerToken: AnyListenerToken?
   private var videoFrameListenerToken: AnyListenerToken?
@@ -116,9 +122,19 @@ final class StreamSessionViewModel: ObservableObject {
     showPhotoCaptureError = false
   }
 
-  func dismissPhotoPreview() {
-    showPhotoPreview = false
-    capturedPhoto = nil
+  func dismissLore() {
+    activeLoreTask?.cancel()
+    activeLoreTask = nil
+    loreSpeaker.stop()
+    loreState = .idle
+  }
+
+  func retryLore() {
+    guard let data = lastPhotoData else {
+      loreState = .idle
+      return
+    }
+    runLorePipeline(with: data)
   }
 
   // MARK: - Private
@@ -195,9 +211,45 @@ final class StreamSessionViewModel: ObservableObject {
 
   private func handlePhotoData(_ data: PhotoData) {
     isCapturingPhoto = false
-    if let image = UIImage(data: data.data) {
-      capturedPhoto = image
-      showPhotoPreview = true
+    capturedPhoto = UIImage(data: data.data)
+    lastPhotoData = data.data
+    runLorePipeline(with: data.data)
+  }
+
+  private func runLorePipeline(with jpegData: Data) {
+    activeLoreTask?.cancel()
+    loreSpeaker.stop()
+    loreState = .thinking
+
+    activeLoreTask = Task { [loreService, loreSpeaker] in
+      do {
+        let text = try await loreService.lore(forJPEG: jpegData)
+        guard !Task.isCancelled else { return }
+        await MainActor.run {
+          self.loreState = .speaking(text)
+        }
+        do {
+          try loreSpeaker.prepareAudioSession()
+        } catch {
+          NSLog("[Lore] Audio session setup failed: \(error)")
+        }
+        loreSpeaker.speak(text) { [weak self] in
+          Task { @MainActor in
+            guard let self else { return }
+            if case .speaking(let current) = self.loreState {
+              self.loreState = .finished(current)
+            }
+          }
+        }
+      } catch is CancellationError {
+        return
+      } catch {
+        guard !Task.isCancelled else { return }
+        let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+        await MainActor.run {
+          self.loreState = .error(message)
+        }
+      }
     }
   }
 

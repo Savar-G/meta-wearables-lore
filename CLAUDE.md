@@ -14,7 +14,7 @@ The user taps a button in the iOS app, the glasses capture whatever they're look
 2. User taps **Capture** button in the app
 3. App calls `StreamSession.capturePhoto(format: .jpeg)` on the paired glasses
 4. Photo bytes arrive via `photoDataPublisher`
-5. App sends the JPEG to the Claude Vision API with a prompt like *"Identify what's in this image and give me one genuinely interesting, surprising fun fact about it — keep it under 20 seconds when spoken aloud."*
+5. App sends the JPEG to **OpenRouter** (`/api/v1/chat/completions`, OpenAI-compatible schema) with a vision-capable model. Default: `anthropic/claude-sonnet-4.6`. Prompt: *"Identify what's in this image and give me one genuinely interesting, surprising fun fact about it — keep it under 20 seconds when spoken aloud."* The model is user-selectable in the in-app Settings sheet.
 6. Response text is spoken via `AVSpeechSynthesizer`, routed to the glasses speakers through `AVAudioSession` with `.allowBluetooth` (A2DP)
 
 ### Scope for MVP
@@ -27,8 +27,23 @@ The user taps a button in the iOS app, the glasses capture whatever they're look
 - **iOS app:** SwiftUI, forked from Meta's `samples/CameraAccess/` reference app
 - **SDK:** Meta Wearables Device Access Toolkit (DAT) v0.6.0 via Swift Package Manager
   - Modules: `MWDATCore` (required), `MWDATCamera` (required), `MWDATMockDevice` (debug-only)
-- **AI:** Claude Vision API (`claude-opus-4-7` or `claude-sonnet-4-6`) for image → fun-fact
+- **AI:** OpenRouter (any vision-capable model). Default `anthropic/claude-sonnet-4.6`. Other options in `LoreConfig.availableModels` (Opus 4.7, Haiku 4.5, GPT-4o, Gemini 2.5 Pro/Flash). The user's API key + model selection live in the in-app Settings sheet (`LoreSettingsView`), persisted via `LoreSecrets` (UserDefaults for MVP; Keychain TODO)
 - **TTS:** `AVSpeechSynthesizer` (built into iOS) routed through glasses
+
+### Lore pipeline code layout
+
+```
+Lore/Services/
+  LoreConfig.swift   — base URL, default + available models, system prompt, token budget
+  LoreSecrets.swift  — api-key + model persistence (UserDefaults, Keychain TODO)
+  LoreService.swift  — OpenRouter client: lore(forJPEG: Data) async throws -> String
+  LoreSpeaker.swift  — AVSpeechSynthesizer wrapper, configures AVAudioSession for A2DP
+Lore/Views/
+  LoreSettingsView.swift  — SwiftUI Form (api-key SecureField + model Picker)
+  LoreOverlayView.swift   — HUD bubbles driven by LoreFlowState enum
+```
+
+`StreamSessionViewModel.runLorePipeline(with:)` is the single pipeline entry point. It's called from `handlePhotoData` after `photoDataPublisher` fires. It cancels any prior run, sets `loreState = .thinking`, calls `LoreService`, then `.speaking`, then delegates to `LoreSpeaker`; the speaker's completion flips state to `.finished`.
 
 ## How to work on this codebase
 
@@ -66,19 +81,21 @@ Before writing any DAT-related Swift, consult the relevant skill. Invoke them vi
 
 - **Swift style:** follow the conventions in `.claude/rules/dat-conventions.md` — async/await everywhere, `@MainActor` on UI-touching code, `.listen {}` for publishers, never block the main thread with frame processing
 - **Error handling:** do/catch on throwing SDK calls, surface user-facing errors via the existing `WearablesViewModel.showError` pattern (inherited from CameraAccess)
-- **Secrets:** the Claude API key must **never** be committed. Store via `.xcconfig` (gitignored) or the iOS Keychain — wire it up through a `LoreSecrets` abstraction, not scattered string literals
+- **Secrets:** the OpenRouter API key must **never** be committed. It's entered by the user in the Settings sheet and persisted in UserDefaults via `LoreSecrets` (Keychain migration is an open TODO). Never add scattered string literals for keys.
 - **No premature abstraction:** this is a portfolio MVP. Don't build a plugin system for "future lore sources" or similar. Ship the single happy path, then iterate
 - **Mock-first dev loop:** any new feature should work against `MWDATMockDevice` before requiring real hardware
 
 ## Open questions / known gaps
 
 1. **"Hey Meta" voice trigger** — not in public SDK. If Meta ships intent registration later, swap out the in-app button for voice. Track via Meta's discussions forum.
-2. **TTS latency** — end-to-end capture → Claude → TTS may feel slow. If > 3s, stream the Claude response and start TTS on the first sentence.
-3. **Failure modes** — what happens when Claude returns "I can't identify this image"? Probably a generic curiosity line ("I don't know what that is, but whatever it is, it's yours now"). Design the fallbacks deliberately.
+2. **TTS latency** — end-to-end capture → OpenRouter → TTS may feel slow. If > 3s, switch to a streaming chat completion and start TTS on the first sentence.
+3. **Failure modes** — when the model returns "I can't identify this image", the system prompt asks it to respond with a playful one-liner. Real-world behavior needs to be validated on hardware.
+4. **Keychain migration** — `LoreSecrets` currently writes to `UserDefaults`. Move to Keychain before shipping outside of a portfolio context.
 
 ## How to verify the app works
 
-1. MockDeviceKit (debug build): launch app → open debug menu → pair Ray-Ban Meta → start stream → tap Capture → verify mock photo flows through Claude Vision → TTS plays
-2. Real hardware: enable Developer Mode in Meta AI app → run on physical iPhone → pair glasses → full end-to-end test
+1. **Settings first** — launch app → tap the gear icon on the `NonStreamView` → "Lore settings" → paste an OpenRouter API key → pick a model → Save. Nothing calls the API without this.
+2. **MockDeviceKit (debug build)**: open debug menu → pair Ray-Ban Meta mock → start stream → tap Capture → verify the mock JPEG round-trips through OpenRouter and TTS plays through the device speaker.
+3. **Real hardware**: enable Developer Mode in Meta AI app → run on physical iPhone 16 Pro Max → pair real Ray-Ban Meta → start stream → tap Capture → verify TTS plays through the glasses speakers (A2DP).
 
-Always test the capture → Claude → TTS path end-to-end before claiming a feature works. Type-checking isn't enough for media-pipeline work.
+Always test the capture → OpenRouter → TTS path end-to-end before claiming a feature works. Type-checking isn't enough for media-pipeline work.

@@ -20,6 +20,7 @@ import SwiftUI
 struct StreamView: View {
   @ObservedObject var viewModel: StreamSessionViewModel
   @ObservedObject var wearablesVM: WearablesViewModel
+  @State private var showSettings: Bool = false
 
   var body: some View {
     ZStack {
@@ -43,10 +44,34 @@ struct StreamView: View {
           .foregroundColor(.white)
       }
 
-      // Bottom controls layer
-
+      // Top-right Settings button
       VStack {
+        HStack {
+          Spacer()
+          Button {
+            showSettings = true
+          } label: {
+            Image(systemName: "gearshape.fill")
+              .font(.title3)
+              .foregroundColor(.white)
+              .padding(12)
+              .background(Circle().fill(Color.black.opacity(0.55)))
+          }
+          .accessibilityIdentifier("settings_button")
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 8)
         Spacer()
+      }
+
+      // Lore overlay + bottom controls
+      VStack(spacing: 12) {
+        Spacer()
+        LoreOverlayView(
+          state: viewModel.loreState,
+          onDismiss: { viewModel.dismissLore() },
+          onRetry: { viewModel.retryLore() }
+        )
         ControlsView(viewModel: viewModel)
       }
       .padding(.all, 24)
@@ -58,16 +83,8 @@ struct StreamView: View {
         }
       }
     }
-    // Show captured photos from DAT SDK in a preview sheet
-    .sheet(isPresented: $viewModel.showPhotoPreview) {
-      if let photo = viewModel.capturedPhoto {
-        PhotoPreviewView(
-          photo: photo,
-          onDismiss: {
-            viewModel.dismissPhotoPreview()
-          }
-        )
-      }
+    .sheet(isPresented: $showSettings) {
+      LoreSettingsView()
     }
   }
 }
