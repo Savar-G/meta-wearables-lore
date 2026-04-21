@@ -21,6 +21,7 @@ struct NonStreamView: View {
   @ObservedObject var wearablesVM: WearablesViewModel
   @State private var sheetHeight: CGFloat = 300
   @State private var showSettingsMenu: Bool = false
+  @State private var showLoreSettings: Bool = false
 
   var body: some View {
     ZStack {
@@ -54,17 +55,29 @@ struct NonStreamView: View {
           }
           .overlay(alignment: .trailing) {
             if showSettingsMenu {
-              CustomButton(
-                title: "Disconnect",
-                style: .destructive,
-                isDisabled: wearablesVM.registrationState != .registered
-              ) {
-                wearablesVM.disconnectGlasses()
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                  showSettingsMenu = false
+              VStack(alignment: .trailing, spacing: 8) {
+                CustomButton(
+                  title: "Lore settings",
+                  style: .primary,
+                  isDisabled: false
+                ) {
+                  withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                    showSettingsMenu = false
+                  }
+                  showLoreSettings = true
+                }
+                CustomButton(
+                  title: "Disconnect",
+                  style: .destructive,
+                  isDisabled: wearablesVM.registrationState != .registered
+                ) {
+                  wearablesVM.disconnectGlasses()
+                  withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                    showSettingsMenu = false
+                  }
                 }
               }
-              .frame(width: 120)
+              .frame(width: 140)
               .transition(.scale(scale: 0.01, anchor: .trailing).combined(with: .opacity))
             }
           }
@@ -127,6 +140,9 @@ struct NonStreamView: View {
       } else {
         GettingStartedSheetView(height: $sheetHeight)
       }
+    }
+    .sheet(isPresented: $showLoreSettings) {
+      LoreSettingsView()
     }
   }
 }

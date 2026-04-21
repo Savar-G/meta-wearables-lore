@@ -8,13 +8,11 @@
 
 /* Begin PBXBuildFile section */
 		8F2D23802E856711002D0588 /* DebugMenuViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F2D237F2E856711002D0588 /* DebugMenuViewModel.swift */; };
-		FEEE00012F95000100000001 /* DeviceSessionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = FEEE00002F95000100000001 /* DeviceSessionManager.swift */; };
 		8F8F00782E8ACB4600A4BDAF /* WearablesViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F8F00772E8ACB4500A4BDAF /* WearablesViewModel.swift */; };
 		8FD96B7F2E6F0A9800F56AB1 /* LoreApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FD96B792E6F0A9800F56AB1 /* LoreApp.swift */; };
 		8FD96B812E6F0A9800F56AB1 /* HomeScreenView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FD96B722E6F0A9800F56AB1 /* HomeScreenView.swift */; };
 		8FD96B872E6F0A9800F56AB1 /* StreamSessionViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FD96B6F2E6F0A9800F56AB1 /* StreamSessionViewModel.swift */; };
 		8FD96B882E6F0A9800F56AB1 /* StreamSessionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FD96B752E6F0A9800F56AB1 /* StreamSessionView.swift */; };
-		8FD96B8A2E6F0A9800F56AB1 /* PhotoPreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FD96B742E6F0A9800F56AB1 /* PhotoPreviewView.swift */; };
 		8FD96B8D2E6F0A9800F56AB1 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 8FD96B772E6F0A9800F56AB1 /* Assets.xcassets */; };
 		8FD96B952E6F0F7D00F56AB1 /* MWDATCore in Frameworks */ = {isa = PBXBuildFile; productRef = 8FD96B942E6F0F7D00F56AB1 /* MWDATCore */; };
 		8FD96B952E6F0F7D00F56AB2 /* MWDATCamera in Frameworks */ = {isa = PBXBuildFile; productRef = 8FD96B942E6F0F7D00F56AB2 /* MWDATCamera */; };
@@ -36,6 +34,13 @@
 		E6DA451E2E79A63100E3F688 /* CardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6DA45172E79A63100E3F688 /* CardView.swift */; };
 		E6DA451F2E79A63100E3F688 /* MockDeviceKitView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6DA451A2E79A63100E3F688 /* MockDeviceKitView.swift */; };
 		E6FD3BCE2EB4D53A00E7FE5D /* NonStreamView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6FD3BCD2EB4D53A00E7FE5D /* NonStreamView.swift */; };
+		FEEE00012F95000100000001 /* DeviceSessionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = FEEE00002F95000100000001 /* DeviceSessionManager.swift */; };
+		1A10000000000000000000A3 /* LoreConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A10000000000000000000A2 /* LoreConfig.swift */; };
+		1A10000000000000000000A5 /* LoreSecrets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A10000000000000000000A4 /* LoreSecrets.swift */; };
+		1A10000000000000000000A7 /* LoreService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A10000000000000000000A6 /* LoreService.swift */; };
+		1A10000000000000000000A9 /* LoreSpeaker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A10000000000000000000A8 /* LoreSpeaker.swift */; };
+		1A10000000000000000000B1 /* LoreSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A10000000000000000000B0 /* LoreSettingsView.swift */; };
+		1A10000000000000000000B3 /* LoreOverlayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A10000000000000000000B2 /* LoreOverlayView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -72,10 +77,8 @@
 		3A3A3A3A3A3A3A3A3A3A3A3A /* Lore.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Lore.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		8F2D237F2E856711002D0588 /* DebugMenuViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DebugMenuViewModel.swift; sourceTree = "<group>"; };
 		8F8F00772E8ACB4500A4BDAF /* WearablesViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WearablesViewModel.swift; sourceTree = "<group>"; };
-		FEEE00002F95000100000001 /* DeviceSessionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceSessionManager.swift; sourceTree = "<group>"; };
 		8FD96B6F2E6F0A9800F56AB1 /* StreamSessionViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamSessionViewModel.swift; sourceTree = "<group>"; };
 		8FD96B722E6F0A9800F56AB1 /* HomeScreenView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeScreenView.swift; sourceTree = "<group>"; };
-		8FD96B742E6F0A9800F56AB1 /* PhotoPreviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoPreviewView.swift; sourceTree = "<group>"; };
 		8FD96B752E6F0A9800F56AB1 /* StreamSessionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamSessionView.swift; sourceTree = "<group>"; };
 		8FD96B772E6F0A9800F56AB1 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		8FD96B782E6F0A9800F56AB1 /* Lore.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Lore.entitlements; sourceTree = "<group>"; };
@@ -100,6 +103,13 @@
 		E6DA45182E79A63100E3F688 /* MockDeviceCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockDeviceCardView.swift; sourceTree = "<group>"; };
 		E6DA451A2E79A63100E3F688 /* MockDeviceKitView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockDeviceKitView.swift; sourceTree = "<group>"; };
 		E6FD3BCD2EB4D53A00E7FE5D /* NonStreamView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NonStreamView.swift; sourceTree = "<group>"; };
+		FEEE00002F95000100000001 /* DeviceSessionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceSessionManager.swift; sourceTree = "<group>"; };
+		1A10000000000000000000A2 /* LoreConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoreConfig.swift; sourceTree = "<group>"; };
+		1A10000000000000000000A4 /* LoreSecrets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoreSecrets.swift; sourceTree = "<group>"; };
+		1A10000000000000000000A6 /* LoreService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoreService.swift; sourceTree = "<group>"; };
+		1A10000000000000000000A8 /* LoreSpeaker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoreSpeaker.swift; sourceTree = "<group>"; };
+		1A10000000000000000000B0 /* LoreSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoreSettingsView.swift; sourceTree = "<group>"; };
+		1A10000000000000000000B2 /* LoreOverlayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoreOverlayView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -176,19 +186,32 @@
 				8FFD605E2E84A2F70035E446 /* DebugMenuView.swift */,
 				8FD96B722E6F0A9800F56AB1 /* HomeScreenView.swift */,
 				8FFD605F2E84A2F70035E446 /* MainAppView.swift */,
-				8FD96B742E6F0A9800F56AB1 /* PhotoPreviewView.swift */,
 				8FFD60532E849D0D0035E446 /* RegistrationView.swift */,
 				8FD96B752E6F0A9800F56AB1 /* StreamSessionView.swift */,
 				E6A188472EB918740097D0E1 /* StreamView.swift */,
 				E6FD3BCD2EB4D53A00E7FE5D /* NonStreamView.swift */,
+				1A10000000000000000000B0 /* LoreSettingsView.swift */,
+				1A10000000000000000000B2 /* LoreOverlayView.swift */,
 			);
 			path = Views;
+			sourceTree = "<group>";
+		};
+		1A10000000000000000000A1 /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				1A10000000000000000000A2 /* LoreConfig.swift */,
+				1A10000000000000000000A4 /* LoreSecrets.swift */,
+				1A10000000000000000000A6 /* LoreService.swift */,
+				1A10000000000000000000A8 /* LoreSpeaker.swift */,
+			);
+			path = Services;
 			sourceTree = "<group>";
 		};
 		8FD96B7D2E6F0A9800F56AB1 /* Lore */ = {
 			isa = PBXGroup;
 			children = (
 				E66CC01A2F3E1A9300B07379 /* TestResources */,
+				1A10000000000000000000A1 /* Services */,
 				8FD96B702E6F0A9800F56AB1 /* ViewModels */,
 				8FD96B762E6F0A9800F56AB1 /* Views */,
 				8FD96B772E6F0A9800F56AB1 /* Assets.xcassets */,
@@ -311,8 +334,9 @@
 		CCCCCCCCCCCCCCCCCCCCCC /* Project object */ = {
 			isa = PBXProject;
 			attributes = {
+				BuildIndependentTargetsInParallel = YES;
 				LastSwiftUpdateCheck = 2620;
-				LastUpgradeCheck = 1250;
+				LastUpgradeCheck = 2640;
 				TargetAttributes = {
 					8A8A8A8A8A8A8A8A8A8A8A8A = {
 						CreatedOnToolsVersion = 12.5;
@@ -398,13 +422,18 @@
 				8FD96B882E6F0A9800F56AB1 /* StreamSessionView.swift in Sources */,
 				8FFD60602E84A2F70035E446 /* MainAppView.swift in Sources */,
 				8FFD60612E84A2F70035E446 /* DebugMenuView.swift in Sources */,
-				8FD96B8A2E6F0A9800F56AB1 /* PhotoPreviewView.swift in Sources */,
 				E66D30242E7DA71900470B48 /* MockDeviceKitButton.swift in Sources */,
 				8F8F00782E8ACB4600A4BDAF /* WearablesViewModel.swift in Sources */,
 				E6A188482EB918740097D0E1 /* StreamView.swift in Sources */,
 				8FFD5FF52E8422580035E446 /* CircleButton.swift in Sources */,
 				8FFD5FF62E8422580035E446 /* CustomButton.swift in Sources */,
 				E6FD3BCE2EB4D53A00E7FE5D /* NonStreamView.swift in Sources */,
+				1A10000000000000000000A3 /* LoreConfig.swift in Sources */,
+				1A10000000000000000000A5 /* LoreSecrets.swift in Sources */,
+				1A10000000000000000000A7 /* LoreService.swift in Sources */,
+				1A10000000000000000000A9 /* LoreSpeaker.swift in Sources */,
+				1A10000000000000000000B1 /* LoreSettingsView.swift in Sources */,
+				1A10000000000000000000B3 /* LoreOverlayView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -449,8 +478,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "";
-				DEVELOPMENT_TEAM = "";
-				"DEVELOPMENT_TEAM[sdk=iphoneos*]" = "";
+				DEVELOPMENT_TEAM = BA3JQQ8HVQ;
 				ENABLE_PREVIEWS = YES;
 				FRAMEWORK_SEARCH_PATHS = "";
 				INFOPLIST_FILE = Lore/Info.plist;
@@ -480,8 +508,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "";
-				DEVELOPMENT_TEAM = "";
-				"DEVELOPMENT_TEAM[sdk=iphoneos*]" = "";
+				DEVELOPMENT_TEAM = BA3JQQ8HVQ;
 				ENABLE_PREVIEWS = YES;
 				INFOPLIST_FILE = Lore/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
@@ -611,6 +638,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
@@ -663,6 +691,7 @@
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 			};
@@ -672,6 +701,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
@@ -717,6 +747,7 @@
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_OPTIMIZATION_LEVEL = "-O";
 				VALIDATE_PRODUCT = YES;
