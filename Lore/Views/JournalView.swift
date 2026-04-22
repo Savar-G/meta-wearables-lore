@@ -411,6 +411,16 @@ struct JournalEntryDetailView: View {
     } catch {
       NSLog("[Lore] Replay audio session setup failed: \(error)")
     }
+    // Pick the language the entry was originally in so we don't try to
+    // speak Japanese transcripts with an en-US voice. Entries from before
+    // the language picker shipped have languageCode == nil; those fall
+    // through to the speaker's default (English) which is the only voice
+    // they were ever spoken with.
+    if let code = entry.languageCode,
+      let language = LoreLanguage.allCases.first(where: { $0.voiceCode == code })
+    {
+      speaker.setLanguage(language)
+    }
     isReplaying = true
     speaker.speak(entry.transcript) {
       isReplaying = false
