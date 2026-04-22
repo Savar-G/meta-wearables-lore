@@ -307,34 +307,115 @@ final class StreamSessionViewModel: ObservableObject {
     loreSpeaker.stop()
     loreState = .thinking
 
-    activeLoreTask = Task { [loreService, loreSpeaker] in
-      do {
-        let text = try await loreService.lore(forJPEG: jpegData)
-        guard !Task.isCancelled else { return }
+    // Prepare audio session up front so the first utterance doesn't pay the
+    // category-activation latency. Failures here are logged but non-fatal —
+    // TTS will still attempt to play on the default route.
+    do {
+      try loreSpeaker.prepareAudioSession()
+    } catch {
+      NSLog("[Lore] Audio session setup failed: \(error)")
+    }
+
+    if LoreConfig.useStreaming {
+      activeLoreTask = Task { [loreService, loreSpeaker] in
+        await self.runStreamingPipeline(
+          jpegData: jpegData,
+          loreService: loreService,
+          loreSpeaker: loreSpeaker
+        )
+      }
+    } else {
+      activeLoreTask = Task { [loreService, loreSpeaker] in
+        await self.runNonStreamingPipeline(
+          jpegData: jpegData,
+          loreService: loreService,
+          loreSpeaker: loreSpeaker
+        )
+      }
+    }
+  }
+
+  /// SSE path. Starts TTS on the first full sentence, so time-to-first-word
+  /// is driven by model latency, not model completion.
+  private func runStreamingPipeline(
+    jpegData: Data,
+    loreService: LoreService,
+    loreSpeaker: LoreSpeaker
+  ) async {
+    // When the speaker drains its last utterance AFTER the stream completes,
+    // flip the overlay to .finished with the accumulated transcript.
+    let transcript = TranscriptBox()
+    loreSpeaker.beginStream { [weak self] in
+      Task { @MainActor in
+        guard let self else { return }
+        let text = await transcript.read()
+        if case .speaking = self.loreState {
+          self.loreState = .finished(text)
+        } else if case .thinking = self.loreState, !text.isEmpty {
+          self.loreState = .finished(text)
+        }
+      }
+    }
+
+    do {
+      for try await delta in loreService.streamLore(forJPEG: jpegData) {
+        if Task.isCancelled { break }
+        await transcript.append(delta)
+        let running = await transcript.read()
         await MainActor.run {
-          self.loreState = .speaking(text)
+          // Flip to .speaking on the first token so the overlay shows the
+          // text building in real time.
+          self.loreState = .speaking(running)
         }
-        do {
-          try loreSpeaker.prepareAudioSession()
-        } catch {
-          NSLog("[Lore] Audio session setup failed: \(error)")
-        }
-        loreSpeaker.speak(text) { [weak self] in
-          Task { @MainActor in
-            guard let self else { return }
-            if case .speaking(let current) = self.loreState {
-              self.loreState = .finished(current)
-            }
+        loreSpeaker.enqueue(delta)
+      }
+
+      if Task.isCancelled {
+        loreSpeaker.stop()
+        return
+      }
+      loreSpeaker.markStreamComplete()
+    } catch is CancellationError {
+      loreSpeaker.stop()
+      return
+    } catch {
+      if Task.isCancelled { return }
+      loreSpeaker.stop()
+      let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+      await MainActor.run {
+        self.loreState = .error(message)
+      }
+    }
+  }
+
+  /// Legacy one-shot path, kept behind `LoreConfig.useStreaming = false` so
+  /// we can A/B if the SSE path misbehaves on a specific model.
+  private func runNonStreamingPipeline(
+    jpegData: Data,
+    loreService: LoreService,
+    loreSpeaker: LoreSpeaker
+  ) async {
+    do {
+      let text = try await loreService.lore(forJPEG: jpegData)
+      guard !Task.isCancelled else { return }
+      await MainActor.run {
+        self.loreState = .speaking(text)
+      }
+      loreSpeaker.speak(text) { [weak self] in
+        Task { @MainActor in
+          guard let self else { return }
+          if case .speaking(let current) = self.loreState {
+            self.loreState = .finished(current)
           }
         }
-      } catch is CancellationError {
-        return
-      } catch {
-        guard !Task.isCancelled else { return }
-        let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
-        await MainActor.run {
-          self.loreState = .error(message)
-        }
+      }
+    } catch is CancellationError {
+      return
+    } catch {
+      guard !Task.isCancelled else { return }
+      let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+      await MainActor.run {
+        self.loreState = .error(message)
       }
     }
   }
@@ -342,6 +423,15 @@ final class StreamSessionViewModel: ObservableObject {
   private func showError(_ message: String) {
     errorMessage = message
     showError = true
+  }
+
+  /// Tiny actor that accumulates streamed tokens. Using an actor rather than
+  /// a `var String` avoids data races between the SSE consumer and the
+  /// speaker's `onFinish` callback that reads the final transcript.
+  private actor TranscriptBox {
+    private var buffer: String = ""
+    func append(_ fragment: String) { buffer.append(fragment) }
+    func read() -> String { buffer }
   }
 
   private func formatError(_ error: StreamSessionError) -> String {
