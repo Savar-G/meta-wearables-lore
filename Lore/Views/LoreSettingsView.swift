@@ -5,6 +5,7 @@ struct LoreSettingsView: View {
   @State private var apiKey: String = LoreSecrets.apiKey ?? ""
   @State private var selectedModel: String = LoreSecrets.model
   @State private var selectedPersona: LorePersona = LoreSecrets.persona
+  @State private var selectedLanguage: LoreLanguage = LoreSecrets.language
   @State private var showAPIKey: Bool = false
 
   var body: some View {
@@ -60,6 +61,18 @@ struct LoreSettingsView: View {
           Text("Narrator")
         } footer: {
           Text(selectedPersona.tagline)
+        }
+
+        Section {
+          Picker("Language", selection: $selectedLanguage) {
+            ForEach(LoreLanguage.allCases) { language in
+              Text(language.displayName).tag(language)
+            }
+          }
+        } header: {
+          Text("Language")
+        } footer: {
+          Text("Response + speech output. Your phone needs the matching TTS voice installed; most ship by default on iOS 17+.")
         }
       }
       .navigationTitle("Lore Settings")

@@ -18,8 +18,43 @@ enum LoreServiceError: LocalizedError {
     case .decoding(let error):
       return "Couldn't parse the response: \(error.localizedDescription)"
     case .transport(let error):
+      // Distinguish "you're actually offline" from "the server hung up
+      // in a weird way". Offline is actionable by the user; generic
+      // transport usually just means "tap retry and hope".
+      if let urlError = error as? URLError, Self.isOffline(urlError) {
+        return
+          "You're offline. Reconnect and tap Retry. Your Journal still works offline — open it from the Lore menu."
+      }
       return "Network error: \(error.localizedDescription)"
     }
+  }
+
+  /// True when this error represents a lack of connectivity (not just a
+  /// transient server hiccup). `.notConnectedToInternet` fires when there's
+  /// no route; `.networkConnectionLost` fires when the connection dropped
+  /// mid-request (tunnel, elevator, lockscreen); `.dataNotAllowed` fires
+  /// when cellular data is off; `.internationalRoamingOff` fires when the
+  /// user travels and Low Data / Roaming is off. All are user-actionable.
+  var isOffline: Bool {
+    if case .transport(let error) = self,
+      let urlError = error as? URLError
+    {
+      return Self.isOffline(urlError)
+    }
+    return false
+  }
+
+  private static func isOffline(_ error: URLError) -> Bool {
+    let codes: Set<URLError.Code> = [
+      .notConnectedToInternet,
+      .networkConnectionLost,
+      .dataNotAllowed,
+      .internationalRoamingOff,
+      .timedOut,
+      .cannotConnectToHost,
+      .cannotFindHost,
+    ]
+    return codes.contains(error.code)
   }
 }
 

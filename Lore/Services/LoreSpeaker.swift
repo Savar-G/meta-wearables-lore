@@ -24,9 +24,23 @@ final class LoreSpeaker: NSObject, ObservableObject {
   /// while adding streaming support alongside it.
   private var pendingUtterances: Int = 0
 
+  /// Language used to pick the AVSpeechSynthesisVoice for every utterance
+  /// AND to choose the sentence-boundary detection strategy (Latin vs.
+  /// non-Latin). Set via `setLanguage(_:)` before starting a stream; the
+  /// default is English so the one-shot Replay in Journal detail works
+  /// even for pre-Phase-4 entries with no stored language.
+  private var activeLanguage: LoreLanguage = .english
+
   override init() {
     super.init()
     synthesizer.delegate = self
+  }
+
+  /// Pick the TTS voice + sentence-boundary strategy for subsequent
+  /// utterances. Safe to call mid-stream; queued utterances keep their
+  /// original voice (AVSpeechUtterance is immutable once enqueued).
+  func setLanguage(_ language: LoreLanguage) {
+    activeLanguage = language
   }
 
   /// Configure AVAudioSession so playback routes through Bluetooth A2DP
@@ -123,7 +137,12 @@ final class LoreSpeaker: NSObject, ObservableObject {
 
   private func enqueueUtterance(_ text: String) {
     let utterance = AVSpeechUtterance(string: text)
-    utterance.voice = AVSpeechSynthesisVoice(language: "en-US")
+    // Fall back to en-US if the requested language has no voice installed.
+    // AVSpeechSynthesisVoice(language:) is lenient: it matches base
+    // language when the full BCP-47 tag misses, so this is mostly belt-
+    // and-suspenders for languages we forgot to list.
+    utterance.voice =
+      activeLanguage.speechVoice ?? AVSpeechSynthesisVoice(language: "en-US")
     utterance.rate = AVSpeechUtteranceDefaultSpeechRate
     utterance.pitchMultiplier = 1.0
     utterance.volume = 1.0
@@ -132,31 +151,56 @@ final class LoreSpeaker: NSObject, ObservableObject {
     synthesizer.speak(utterance)
   }
 
-  /// Returns an index pointing just past a sentence terminator followed by
-  /// whitespace, or nil if no complete sentence is available yet. Treats
-  /// common abbreviations conservatively — we only split if the period is
-  /// followed by whitespace AND the next non-whitespace char is uppercase
-  /// or the string has ended there.
+  // Latin-script terminators require the whitespace + uppercase-ish follow
+  // heuristic to avoid splitting on abbreviations ("Dr. Smith", "vs.").
+  private static let latinTerminators: Set<Character> = [".", "?", "!"]
+
+  // Full-width CJK stops and the Arabic question mark. These languages
+  // don't use "Dr." abbreviations the same way and frequently don't put
+  // whitespace after a sentence, so we split immediately — as soon as
+  // the terminator arrives, the sentence is done.
+  private static let nonLatinTerminators: Set<Character> = [
+    "\u{3002}",  // 。 ideographic full stop
+    "\u{FF1F}",  // ？ fullwidth question mark
+    "\u{FF01}",  // ！ fullwidth exclamation mark
+    "\u{061F}",  // ؟ Arabic question mark
+    "\u{06D4}",  // ۔ Urdu full stop
+  ]
+
+  /// Returns an index pointing just past a complete sentence, or nil if
+  /// more input is needed. Handles two regimes:
+  ///
+  /// 1. Latin (., ?, !): requires whitespace after the terminator AND the
+  ///    next non-whitespace char to look like a sentence start (uppercase,
+  ///    digit, or opening quote). This defends against false splits on
+  ///    "Dr. Smith", "U.S. Navy", "vs.", etc.
+  ///
+  /// 2. Non-Latin (。？！؟۔): split immediately. No whitespace requirement
+  ///    because CJK scripts don't use it; no case heuristic because these
+  ///    scripts don't have case. False splits are rare and the latency
+  ///    win from early TTS start is the whole point.
   private func nextSentenceBoundary(in text: String) -> String.Index? {
-    let terminators: Set<Character> = [".", "?", "!"]
     var i = text.startIndex
     while i < text.endIndex {
-      if terminators.contains(text[i]) {
+      let ch = text[i]
+      if Self.nonLatinTerminators.contains(ch) {
+        return text.index(after: i)
+      }
+      if Self.latinTerminators.contains(ch) {
         let afterTerminator = text.index(after: i)
         if afterTerminator == text.endIndex { return nil }  // wait for more
         let next = text[afterTerminator]
         if next.isWhitespace {
-          // Look at the next non-whitespace to reduce "Dr. Smith" style
-          // false splits. If none yet, wait.
           var scan = afterTerminator
           while scan < text.endIndex, text[scan].isWhitespace {
             scan = text.index(after: scan)
           }
           if scan == text.endIndex { return nil }
           let nextChar = text[scan]
-          // Accept uppercase, digit, or quote as plausible sentence starts.
-          if nextChar.isUppercase || nextChar.isNumber || nextChar == "\"" || nextChar == "\u{201C}" {
-            return afterTerminator  // include the terminator, drop leading ws
+          if nextChar.isUppercase || nextChar.isNumber
+            || nextChar == "\"" || nextChar == "\u{201C}"
+          {
+            return afterTerminator
           }
         }
       }

@@ -22,6 +22,7 @@ struct NonStreamView: View {
   @State private var sheetHeight: CGFloat = 300
   @State private var showSettingsMenu: Bool = false
   @State private var showLoreSettings: Bool = false
+  @State private var showJournal: Bool = false
 
   var body: some View {
     ZStack {
@@ -56,6 +57,16 @@ struct NonStreamView: View {
           .overlay(alignment: .trailing) {
             if showSettingsMenu {
               VStack(alignment: .trailing, spacing: 8) {
+                CustomButton(
+                  title: "Journal",
+                  style: .primary,
+                  isDisabled: false
+                ) {
+                  withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                    showSettingsMenu = false
+                  }
+                  showJournal = true
+                }
                 CustomButton(
                   title: "Lore settings",
                   style: .primary,
@@ -143,6 +154,9 @@ struct NonStreamView: View {
     }
     .sheet(isPresented: $showLoreSettings) {
       LoreSettingsView()
+    }
+    .sheet(isPresented: $showJournal) {
+      JournalView()
     }
   }
 }

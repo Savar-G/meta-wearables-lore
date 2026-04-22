@@ -34,18 +34,25 @@ enum LorePersona: String, CaseIterable, Identifiable, Codable {
     }
   }
 
-  /// Build the system prompt for this persona, optionally seeded with runtime
-  /// context lines (e.g., reverse-geocoded location in Phase 2 Commit 2).
-  /// Context lines are appended as a small block the model can reference
-  /// without the core persona rules shifting around each request.
-  func systemPrompt(contextLines: [String] = []) -> String {
+  /// Build the system prompt for this persona. Optionally seeded with:
+  /// - `contextLines`: runtime context (location, journal memory).
+  /// - `language`: response language. When non-English, its native-name
+  ///   instruction is appended so the model locks onto it early.
+  func systemPrompt(
+    contextLines: [String] = [],
+    language: LoreLanguage = .english
+  ) -> String {
     var prompt = basePrompt
     let lines = contextLines
       .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
       .filter { !$0.isEmpty }
-    guard !lines.isEmpty else { return prompt }
-    prompt.append("\n\nContext (may or may not apply to the image; use it only if it fits):\n")
-    prompt.append(lines.map { "- \($0)" }.joined(separator: "\n"))
+    if !lines.isEmpty {
+      prompt.append("\n\nContext (may or may not apply to the image; use it only if it fits):\n")
+      prompt.append(lines.map { "- \($0)" }.joined(separator: "\n"))
+    }
+    if let languageInstruction = language.promptInstruction {
+      prompt.append("\n\n\(languageInstruction)")
+    }
     return prompt
   }
 

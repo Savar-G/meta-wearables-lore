@@ -1,33 +1,40 @@
 ---
-description: Build the Xcode project using Swift Package Manager
+description: Build the Lore Xcode project for iOS Simulator or a physical device
 ---
 
-Build the Xcode project using Swift Package Manager.
+Build the Lore Xcode project.
 
 ## Prerequisites
 
-- Xcode 15.0 or later
-- iOS 16.0+ deployment target
-- Meta Wearables DAT SDK added via SPM
+- Xcode 16+
+- iOS 17.0+ deployment target
+- Meta Wearables DAT SDK wired via SPM (already configured in `Lore.xcodeproj`)
 
-## Build
+## Build (simulator)
 
-Open the `.xcodeproj` or `.xcworkspace` in Xcode and build with Cmd+B, or from the command line:
+From the project root (`Lore/`):
 
 ```bash
-xcodebuild -scheme YourScheme -sdk iphonesimulator -destination 'platform=iOS Simulator,name=iPhone 15' build
+xcodebuild -project Lore.xcodeproj -scheme Lore -configuration Debug \
+  -destination 'platform=iOS Simulator,name=iPhone 17 Pro' build
 ```
+
+Simulator works for mock flows (MockDeviceKit menu), but not for real glasses streaming or A2DP TTS-to-glasses.
 
 ## Run on device
 
-To test with real glasses, build and run on a physical device:
+To test the full capture → OpenRouter → glasses-speaker path you need physical hardware:
 
 ```bash
-xcodebuild -scheme YourScheme -destination 'platform=iOS,id=YOUR_DEVICE_UDID' build
+xcodebuild -project Lore.xcodeproj -scheme Lore \
+  -destination 'platform=iOS,id=YOUR_DEVICE_UDID' build
 ```
+
+Or just hit Cmd+R in Xcode after picking your device.
 
 ## Common build issues
 
-- **Missing package**: Ensure `https://github.com/facebook/meta-wearables-dat-ios` is added in Xcode > File > Add Package Dependencies
-- **Minimum deployment target**: The SDK requires iOS 16.0+
-- **Entitlements**: Ensure `bluetooth-peripheral` and `external-accessory` background modes are enabled
+- **Missing package**: Xcode > File > Add Package Dependencies > `https://github.com/facebook/meta-wearables-dat-ios`.
+- **Signing**: in *Signing & Capabilities*, pick your own development team. Bundle id is currently `com.savargupta.lore`.
+- **Minimum deployment target**: the project and SwiftData both require iOS 17+.
+- **Entitlements**: `bluetooth-peripheral`, `external-accessory`, and the `MWDAT` Info.plist block are already set up — don't remove them.
