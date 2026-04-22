@@ -105,11 +105,14 @@ struct ControlsView: View {
         }
       }
 
-      // Photo button
+      // Photo button — disabled while the stream is warming up or a prior
+      // capture is still in flight, with a visible opacity cue.
       CircleButton(icon: "camera.fill", text: nil) {
         viewModel.capturePhoto()
       }
       .accessibilityIdentifier("capture_photo_button")
+      .opacity(viewModel.canCapturePhoto ? 1.0 : 0.4)
+      .disabled(!viewModel.canCapturePhoto)
     }
   }
 }

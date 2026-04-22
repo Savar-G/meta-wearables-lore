@@ -30,7 +30,14 @@ final class StreamSessionViewModel: ObservableObject {
 
   @Published var capturedPhoto: UIImage?
   @Published var showPhotoCaptureError: Bool = false
+  @Published var photoCaptureErrorMessage: String = ""
   @Published var isCapturingPhoto: Bool = false
+
+  /// True when the capture button should be tappable — stream is live and
+  /// no prior capture is still in flight.
+  var canCapturePhoto: Bool {
+    streamingStatus == .streaming && !isCapturingPhoto
+  }
 
   @Published var hasActiveDevice: Bool = false
   @Published var isDeviceSessionReady: Bool = false
@@ -55,6 +62,11 @@ final class StreamSessionViewModel: ObservableObject {
   private var videoFrameListenerToken: AnyListenerToken?
   private var errorListenerToken: AnyListenerToken?
   private var photoDataListenerToken: AnyListenerToken?
+
+  /// Recovers `isCapturingPhoto` if `photoDataPublisher` never fires.
+  /// Without this, one silent SDK drop locks the button permanently.
+  private var captureTimeoutTask: Task<Void, Never>?
+  private static let captureTimeoutSeconds: UInt64 = 8
 
   // MARK: - Init
 
@@ -94,6 +106,9 @@ final class StreamSessionViewModel: ObservableObject {
     guard let stream = streamSession else { return }
     streamSession = nil
     clearListeners()
+    captureTimeoutTask?.cancel()
+    captureTimeoutTask = nil
+    isCapturingPhoto = false
     streamingStatus = .stopped
     currentVideoFrame = nil
     hasReceivedFirstFrame = false
@@ -101,15 +116,62 @@ final class StreamSessionViewModel: ObservableObject {
   }
 
   func capturePhoto() {
-    guard !isCapturingPhoto, streamingStatus == .streaming else {
+    // Each failure path gets a specific message so console + alert tell us
+    // exactly which guard tripped. Generic "something went wrong" copy is
+    // useless for debugging on hardware.
+    if isCapturingPhoto {
+      NSLog("[Lore] capturePhoto blocked: prior capture still in flight")
+      photoCaptureErrorMessage =
+        "A capture is already in progress. Give it a second."
       showPhotoCaptureError = true
       return
     }
-    isCapturingPhoto = true
-    let success = streamSession?.capturePhoto(format: .jpeg) ?? false
-    if !success {
-      isCapturingPhoto = false
+    guard streamingStatus == .streaming else {
+      NSLog("[Lore] capturePhoto blocked: streamingStatus=\(streamingStatus)")
+      photoCaptureErrorMessage =
+        "The stream isn't ready yet. Wait for the preview to appear, then try again."
       showPhotoCaptureError = true
+      return
+    }
+    guard let session = streamSession else {
+      NSLog("[Lore] capturePhoto blocked: streamSession is nil")
+      photoCaptureErrorMessage =
+        "No active stream. Stop and restart streaming."
+      showPhotoCaptureError = true
+      return
+    }
+
+    isCapturingPhoto = true
+    let accepted = session.capturePhoto(format: .jpeg)
+    if !accepted {
+      NSLog("[Lore] capturePhoto(format: .jpeg) returned false")
+      isCapturingPhoto = false
+      photoCaptureErrorMessage =
+        "The glasses refused the capture request. This is usually low storage on the device or a transient hardware hiccup — try again."
+      showPhotoCaptureError = true
+      return
+    }
+
+    startCaptureTimeout()
+  }
+
+  /// If `photoDataPublisher` doesn't fire within `captureTimeoutSeconds`,
+  /// reset `isCapturingPhoto` and surface a diagnostic. Keeps the button
+  /// from ever getting permanently stuck.
+  private func startCaptureTimeout() {
+    captureTimeoutTask?.cancel()
+    captureTimeoutTask = Task { [weak self] in
+      try? await Task.sleep(
+        nanoseconds: Self.captureTimeoutSeconds * 1_000_000_000)
+      guard !Task.isCancelled else { return }
+      await MainActor.run {
+        guard let self, self.isCapturingPhoto else { return }
+        NSLog("[Lore] capture timed out after \(Self.captureTimeoutSeconds)s — no photo data received")
+        self.isCapturingPhoto = false
+        self.photoCaptureErrorMessage =
+          "The glasses accepted the capture but no photo came back. This can happen after a thermal or connectivity hiccup. Try again — if it keeps happening, stop and restart the stream."
+        self.showPhotoCaptureError = true
+      }
     }
   }
 
@@ -232,6 +294,8 @@ final class StreamSessionViewModel: ObservableObject {
   }
 
   private func handlePhotoData(_ data: PhotoData) {
+    captureTimeoutTask?.cancel()
+    captureTimeoutTask = nil
     isCapturingPhoto = false
     capturedPhoto = UIImage(data: data.data)
     lastPhotoData = data.data
