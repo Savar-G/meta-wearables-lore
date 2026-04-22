@@ -38,12 +38,12 @@ struct LoreService {
     self.modelProvider = modelProvider
   }
 
-  func lore(forJPEG jpegData: Data) async throws -> String {
+  func lore(forJPEG jpegData: Data, systemPrompt: String) async throws -> String {
     guard let apiKey = apiKeyProvider() else { throw LoreServiceError.missingAPIKey }
 
     var request = try makeBaseRequest(apiKey: apiKey)
     request.httpBody = try JSONEncoder().encode(
-      makePayload(jpegData: jpegData, stream: false)
+      makePayload(jpegData: jpegData, systemPrompt: systemPrompt, stream: false)
     )
 
     let data: Data
@@ -82,7 +82,10 @@ struct LoreService {
   ///
   /// Errors are thrown through the stream's termination, so a caller that
   /// uses `for try await` will catch them naturally.
-  func streamLore(forJPEG jpegData: Data) -> AsyncThrowingStream<String, Error> {
+  func streamLore(
+    forJPEG jpegData: Data,
+    systemPrompt: String
+  ) -> AsyncThrowingStream<String, Error> {
     AsyncThrowingStream { continuation in
       let task = Task {
         do {
@@ -93,7 +96,7 @@ struct LoreService {
           var request = try makeBaseRequest(apiKey: apiKey)
           request.addValue("text/event-stream", forHTTPHeaderField: "Accept")
           request.httpBody = try JSONEncoder().encode(
-            makePayload(jpegData: jpegData, stream: true)
+            makePayload(jpegData: jpegData, systemPrompt: systemPrompt, stream: true)
           )
 
           let (bytes, response): (URLSession.AsyncBytes, URLResponse)
@@ -176,12 +179,16 @@ struct LoreService {
     return request
   }
 
-  private func makePayload(jpegData: Data, stream: Bool) -> ChatRequest {
+  private func makePayload(
+    jpegData: Data,
+    systemPrompt: String,
+    stream: Bool
+  ) -> ChatRequest {
     let dataURL = "data:image/jpeg;base64,\(jpegData.base64EncodedString())"
     return ChatRequest(
       model: modelProvider(),
       messages: [
-        .init(role: "system", content: .text(LoreConfig.systemPrompt)),
+        .init(role: "system", content: .text(systemPrompt)),
         .init(role: "user", content: .multipart([
           .text(LoreConfig.userPrompt),
           .imageURL(dataURL),

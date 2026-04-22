@@ -368,10 +368,17 @@ final class StreamSessionViewModel: ObservableObject {
       NSLog("[Lore] Audio session setup failed: \(error)")
     }
 
+    // Build the system prompt once, here, from the currently-selected
+    // persona. Phase 2 Commit 2 will slot reverse-geocoded context lines
+    // into this call — a single place for "everything the model learns
+    // before it sees the image."
+    let systemPrompt = LoreSecrets.persona.systemPrompt()
+
     if LoreConfig.useStreaming {
       activeLoreTask = Task { [loreService, loreSpeaker] in
         await self.runStreamingPipeline(
           jpegData: jpegData,
+          systemPrompt: systemPrompt,
           loreService: loreService,
           loreSpeaker: loreSpeaker
         )
@@ -380,6 +387,7 @@ final class StreamSessionViewModel: ObservableObject {
       activeLoreTask = Task { [loreService, loreSpeaker] in
         await self.runNonStreamingPipeline(
           jpegData: jpegData,
+          systemPrompt: systemPrompt,
           loreService: loreService,
           loreSpeaker: loreSpeaker
         )
@@ -391,6 +399,7 @@ final class StreamSessionViewModel: ObservableObject {
   /// is driven by model latency, not model completion.
   private func runStreamingPipeline(
     jpegData: Data,
+    systemPrompt: String,
     loreService: LoreService,
     loreSpeaker: LoreSpeaker
   ) async {
@@ -410,7 +419,10 @@ final class StreamSessionViewModel: ObservableObject {
     }
 
     do {
-      for try await delta in loreService.streamLore(forJPEG: jpegData) {
+      for try await delta in loreService.streamLore(
+        forJPEG: jpegData,
+        systemPrompt: systemPrompt
+      ) {
         if Task.isCancelled { break }
         await transcript.append(delta)
         let running = await transcript.read()
@@ -444,11 +456,15 @@ final class StreamSessionViewModel: ObservableObject {
   /// we can A/B if the SSE path misbehaves on a specific model.
   private func runNonStreamingPipeline(
     jpegData: Data,
+    systemPrompt: String,
     loreService: LoreService,
     loreSpeaker: LoreSpeaker
   ) async {
     do {
-      let text = try await loreService.lore(forJPEG: jpegData)
+      let text = try await loreService.lore(
+        forJPEG: jpegData,
+        systemPrompt: systemPrompt
+      )
       guard !Task.isCancelled else { return }
       await MainActor.run {
         self.loreState = .speaking(text)

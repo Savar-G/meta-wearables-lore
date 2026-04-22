@@ -4,6 +4,7 @@ struct LoreSettingsView: View {
   @Environment(\.dismiss) private var dismiss
   @State private var apiKey: String = LoreSecrets.apiKey ?? ""
   @State private var selectedModel: String = LoreSecrets.model
+  @State private var selectedPersona: LorePersona = LoreSecrets.persona
   @State private var showAPIKey: Bool = false
 
   var body: some View {
@@ -46,6 +47,20 @@ struct LoreSettingsView: View {
         } footer: {
           Text("Any vision-capable OpenRouter model works. Default: \(LoreConfig.defaultModel).")
         }
+
+        Section {
+          Picker("Voice", selection: $selectedPersona) {
+            ForEach(LorePersona.allCases) { persona in
+              Text(persona.displayName).tag(persona)
+            }
+          }
+          .pickerStyle(.inline)
+          .labelsHidden()
+        } header: {
+          Text("Narrator")
+        } footer: {
+          Text(selectedPersona.tagline)
+        }
       }
       .navigationTitle("Lore Settings")
       .navigationBarTitleDisplayMode(.inline)
@@ -57,6 +72,7 @@ struct LoreSettingsView: View {
           Button("Save") {
             LoreSecrets.apiKey = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
             LoreSecrets.model = selectedModel
+            LoreSecrets.persona = selectedPersona
             dismiss()
           }
           .disabled(apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
