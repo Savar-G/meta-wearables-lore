@@ -11,6 +11,7 @@
 		1A10000000000000000000A5 /* LoreSecrets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A10000000000000000000A4 /* LoreSecrets.swift */; };
 		1A10000000000000000000A7 /* LoreService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A10000000000000000000A6 /* LoreService.swift */; };
 		1A10000000000000000000A9 /* LoreSpeaker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A10000000000000000000A8 /* LoreSpeaker.swift */; };
+		1A10000000000000000000AB /* FrameSharpness.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A10000000000000000000AA /* FrameSharpness.swift */; };
 		1A10000000000000000000B1 /* LoreSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A10000000000000000000B0 /* LoreSettingsView.swift */; };
 		1A10000000000000000000B3 /* LoreOverlayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A10000000000000000000B2 /* LoreOverlayView.swift */; };
 		8F2D23802E856711002D0588 /* DebugMenuViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F2D237F2E856711002D0588 /* DebugMenuViewModel.swift */; };
@@ -78,6 +79,7 @@
 		1A10000000000000000000A4 /* LoreSecrets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoreSecrets.swift; sourceTree = "<group>"; };
 		1A10000000000000000000A6 /* LoreService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoreService.swift; sourceTree = "<group>"; };
 		1A10000000000000000000A8 /* LoreSpeaker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoreSpeaker.swift; sourceTree = "<group>"; };
+		1A10000000000000000000AA /* FrameSharpness.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FrameSharpness.swift; sourceTree = "<group>"; };
 		1A10000000000000000000B0 /* LoreSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoreSettingsView.swift; sourceTree = "<group>"; };
 		1A10000000000000000000B2 /* LoreOverlayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoreOverlayView.swift; sourceTree = "<group>"; };
 		3A3A3A3A3A3A3A3A3A3A3A3A /* Lore.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Lore.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -145,6 +147,7 @@
 				1A10000000000000000000A4 /* LoreSecrets.swift */,
 				1A10000000000000000000A6 /* LoreService.swift */,
 				1A10000000000000000000A8 /* LoreSpeaker.swift */,
+				1A10000000000000000000AA /* FrameSharpness.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -432,6 +435,7 @@
 				1A10000000000000000000A5 /* LoreSecrets.swift in Sources */,
 				1A10000000000000000000A7 /* LoreService.swift in Sources */,
 				1A10000000000000000000A9 /* LoreSpeaker.swift in Sources */,
+				1A10000000000000000000AB /* FrameSharpness.swift in Sources */,
 				1A10000000000000000000B1 /* LoreSettingsView.swift in Sources */,
 				1A10000000000000000000B3 /* LoreOverlayView.swift in Sources */,
 			);

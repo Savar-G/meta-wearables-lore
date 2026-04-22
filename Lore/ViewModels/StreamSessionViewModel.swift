@@ -58,6 +58,19 @@ final class StreamSessionViewModel: ObservableObject {
   private var lastPhotoData: Data?
   private var activeLoreTask: Task<Void, Never>?
 
+  /// Ring buffer of the most-recent video frames. On capture, we score
+  /// these with `FrameSharpness` and send the sharpest into the lore
+  /// pipeline immediately — the glasses' `capturePhoto()` roundtrip can
+  /// add 400-1000ms of latency we don't actually need for the vision
+  /// model (which resizes to ~1024px internally anyway).
+  private var recentFrames: [UIImage] = []
+  private static let recentFramesCapacity = 5
+
+  /// True once we've kicked off lore for the current capture from a
+  /// video frame. Prevents `handlePhotoData` from re-running the pipeline
+  /// when the high-resolution photo eventually arrives.
+  private var loreStartedFromFrame: Bool = false
+
   private var stateListenerToken: AnyListenerToken?
   private var videoFrameListenerToken: AnyListenerToken?
   private var errorListenerToken: AnyListenerToken?
@@ -112,6 +125,8 @@ final class StreamSessionViewModel: ObservableObject {
     streamingStatus = .stopped
     currentVideoFrame = nil
     hasReceivedFirstFrame = false
+    recentFrames.removeAll()
+    loreStartedFromFrame = false
     await stream.stop()
   }
 
@@ -142,6 +157,7 @@ final class StreamSessionViewModel: ObservableObject {
     }
 
     isCapturingPhoto = true
+    loreStartedFromFrame = false
     let accepted = session.capturePhoto(format: .jpeg)
     if !accepted {
       NSLog("[Lore] capturePhoto(format: .jpeg) returned false")
@@ -150,6 +166,19 @@ final class StreamSessionViewModel: ObservableObject {
         "The glasses refused the capture request. This is usually low storage on the device or a transient hardware hiccup — try again."
       showPhotoCaptureError = true
       return
+    }
+
+    // Kick off lore immediately against the sharpest recent video frame.
+    // This buys us the ~400-1000ms the glasses would otherwise spend
+    // capturing + uploading the full-res JPEG. The high-res photo still
+    // arrives via `photoDataPublisher` and gets stored for the journal,
+    // but it doesn't re-trigger the pipeline (see handlePhotoData).
+    if let frameJPEG = bestRecentFrameJPEG() {
+      loreStartedFromFrame = true
+      lastPhotoData = frameJPEG  // Seed retry in case real photo fails to arrive.
+      runLorePipeline(with: frameJPEG)
+    } else {
+      NSLog("[Lore] No recent frames available; waiting for capturePhoto roundtrip")
     }
 
     startCaptureTimeout()
@@ -283,7 +312,21 @@ final class StreamSessionViewModel: ObservableObject {
       if !hasReceivedFirstFrame {
         hasReceivedFirstFrame = true
       }
+      recentFrames.append(image)
+      if recentFrames.count > Self.recentFramesCapacity {
+        recentFrames.removeFirst(recentFrames.count - Self.recentFramesCapacity)
+      }
     }
+  }
+
+  /// Pick the sharpest frame in the ring buffer and encode as JPEG.
+  /// Returns nil if the buffer is empty or encoding fails.
+  private func bestRecentFrameJPEG() -> Data? {
+    guard !recentFrames.isEmpty else { return nil }
+    let best = recentFrames.max { lhs, rhs in
+      FrameSharpness.score(lhs) < FrameSharpness.score(rhs)
+    } ?? recentFrames.last
+    return best?.jpegData(compressionQuality: 0.85)
   }
 
   private func handleError(_ error: StreamSessionError) {
@@ -298,7 +341,16 @@ final class StreamSessionViewModel: ObservableObject {
     captureTimeoutTask = nil
     isCapturingPhoto = false
     capturedPhoto = UIImage(data: data.data)
+    // Upgrade the retry source to the full-res photo now that it's here.
     lastPhotoData = data.data
+
+    // If we already started lore from a video frame, don't restart —
+    // that would cancel the in-flight response and double the latency.
+    // The full-res photo is kept for any later journaling / retry.
+    if loreStartedFromFrame {
+      loreStartedFromFrame = false
+      return
+    }
     runLorePipeline(with: data.data)
   }
 
@@ -307,34 +359,115 @@ final class StreamSessionViewModel: ObservableObject {
     loreSpeaker.stop()
     loreState = .thinking
 
-    activeLoreTask = Task { [loreService, loreSpeaker] in
-      do {
-        let text = try await loreService.lore(forJPEG: jpegData)
-        guard !Task.isCancelled else { return }
+    // Prepare audio session up front so the first utterance doesn't pay the
+    // category-activation latency. Failures here are logged but non-fatal —
+    // TTS will still attempt to play on the default route.
+    do {
+      try loreSpeaker.prepareAudioSession()
+    } catch {
+      NSLog("[Lore] Audio session setup failed: \(error)")
+    }
+
+    if LoreConfig.useStreaming {
+      activeLoreTask = Task { [loreService, loreSpeaker] in
+        await self.runStreamingPipeline(
+          jpegData: jpegData,
+          loreService: loreService,
+          loreSpeaker: loreSpeaker
+        )
+      }
+    } else {
+      activeLoreTask = Task { [loreService, loreSpeaker] in
+        await self.runNonStreamingPipeline(
+          jpegData: jpegData,
+          loreService: loreService,
+          loreSpeaker: loreSpeaker
+        )
+      }
+    }
+  }
+
+  /// SSE path. Starts TTS on the first full sentence, so time-to-first-word
+  /// is driven by model latency, not model completion.
+  private func runStreamingPipeline(
+    jpegData: Data,
+    loreService: LoreService,
+    loreSpeaker: LoreSpeaker
+  ) async {
+    // When the speaker drains its last utterance AFTER the stream completes,
+    // flip the overlay to .finished with the accumulated transcript.
+    let transcript = TranscriptBox()
+    loreSpeaker.beginStream { [weak self] in
+      Task { @MainActor in
+        guard let self else { return }
+        let text = await transcript.read()
+        if case .speaking = self.loreState {
+          self.loreState = .finished(text)
+        } else if case .thinking = self.loreState, !text.isEmpty {
+          self.loreState = .finished(text)
+        }
+      }
+    }
+
+    do {
+      for try await delta in loreService.streamLore(forJPEG: jpegData) {
+        if Task.isCancelled { break }
+        await transcript.append(delta)
+        let running = await transcript.read()
         await MainActor.run {
-          self.loreState = .speaking(text)
+          // Flip to .speaking on the first token so the overlay shows the
+          // text building in real time.
+          self.loreState = .speaking(running)
         }
-        do {
-          try loreSpeaker.prepareAudioSession()
-        } catch {
-          NSLog("[Lore] Audio session setup failed: \(error)")
-        }
-        loreSpeaker.speak(text) { [weak self] in
-          Task { @MainActor in
-            guard let self else { return }
-            if case .speaking(let current) = self.loreState {
-              self.loreState = .finished(current)
-            }
+        loreSpeaker.enqueue(delta)
+      }
+
+      if Task.isCancelled {
+        loreSpeaker.stop()
+        return
+      }
+      loreSpeaker.markStreamComplete()
+    } catch is CancellationError {
+      loreSpeaker.stop()
+      return
+    } catch {
+      if Task.isCancelled { return }
+      loreSpeaker.stop()
+      let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+      await MainActor.run {
+        self.loreState = .error(message)
+      }
+    }
+  }
+
+  /// Legacy one-shot path, kept behind `LoreConfig.useStreaming = false` so
+  /// we can A/B if the SSE path misbehaves on a specific model.
+  private func runNonStreamingPipeline(
+    jpegData: Data,
+    loreService: LoreService,
+    loreSpeaker: LoreSpeaker
+  ) async {
+    do {
+      let text = try await loreService.lore(forJPEG: jpegData)
+      guard !Task.isCancelled else { return }
+      await MainActor.run {
+        self.loreState = .speaking(text)
+      }
+      loreSpeaker.speak(text) { [weak self] in
+        Task { @MainActor in
+          guard let self else { return }
+          if case .speaking(let current) = self.loreState {
+            self.loreState = .finished(current)
           }
         }
-      } catch is CancellationError {
-        return
-      } catch {
-        guard !Task.isCancelled else { return }
-        let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
-        await MainActor.run {
-          self.loreState = .error(message)
-        }
+      }
+    } catch is CancellationError {
+      return
+    } catch {
+      guard !Task.isCancelled else { return }
+      let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+      await MainActor.run {
+        self.loreState = .error(message)
       }
     }
   }
@@ -342,6 +475,15 @@ final class StreamSessionViewModel: ObservableObject {
   private func showError(_ message: String) {
     errorMessage = message
     showError = true
+  }
+
+  /// Tiny actor that accumulates streamed tokens. Using an actor rather than
+  /// a `var String` avoids data races between the SSE consumer and the
+  /// speaker's `onFinish` callback that reads the final transcript.
+  private actor TranscriptBox {
+    private var buffer: String = ""
+    func append(_ fragment: String) { buffer.append(fragment) }
+    func read() -> String { buffer }
   }
 
   private func formatError(_ error: StreamSessionError) -> String {

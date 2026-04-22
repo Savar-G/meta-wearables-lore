@@ -41,27 +41,10 @@ struct LoreService {
   func lore(forJPEG jpegData: Data) async throws -> String {
     guard let apiKey = apiKeyProvider() else { throw LoreServiceError.missingAPIKey }
 
-    let dataURL = "data:image/jpeg;base64,\(jpegData.base64EncodedString())"
-
-    let payload = ChatRequest(
-      model: modelProvider(),
-      messages: [
-        .init(role: "system", content: .text(LoreConfig.systemPrompt)),
-        .init(role: "user", content: .multipart([
-          .text(LoreConfig.userPrompt),
-          .imageURL(dataURL),
-        ])),
-      ],
-      max_tokens: LoreConfig.maxOutputTokens
+    var request = try makeBaseRequest(apiKey: apiKey)
+    request.httpBody = try JSONEncoder().encode(
+      makePayload(jpegData: jpegData, stream: false)
     )
-
-    var request = URLRequest(url: LoreConfig.openRouterBaseURL)
-    request.httpMethod = "POST"
-    request.addValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
-    request.addValue("application/json", forHTTPHeaderField: "Content-Type")
-    request.addValue(LoreConfig.httpReferer, forHTTPHeaderField: "HTTP-Referer")
-    request.addValue(LoreConfig.appTitle, forHTTPHeaderField: "X-Title")
-    request.httpBody = try JSONEncoder().encode(payload)
 
     let data: Data
     let response: URLResponse
@@ -92,6 +75,122 @@ struct LoreService {
     guard !text.isEmpty else { throw LoreServiceError.invalidResponse }
     return text
   }
+
+  /// Streaming variant. Yields text deltas as they arrive via SSE, ending when
+  /// the upstream closes or sends `data: [DONE]`. The caller is responsible
+  /// for accumulating tokens into words/sentences and driving TTS.
+  ///
+  /// Errors are thrown through the stream's termination, so a caller that
+  /// uses `for try await` will catch them naturally.
+  func streamLore(forJPEG jpegData: Data) -> AsyncThrowingStream<String, Error> {
+    AsyncThrowingStream { continuation in
+      let task = Task {
+        do {
+          guard let apiKey = apiKeyProvider() else {
+            throw LoreServiceError.missingAPIKey
+          }
+
+          var request = try makeBaseRequest(apiKey: apiKey)
+          request.addValue("text/event-stream", forHTTPHeaderField: "Accept")
+          request.httpBody = try JSONEncoder().encode(
+            makePayload(jpegData: jpegData, stream: true)
+          )
+
+          let (bytes, response): (URLSession.AsyncBytes, URLResponse)
+          do {
+            (bytes, response) = try await urlSession.bytes(for: request)
+          } catch {
+            throw LoreServiceError.transport(error)
+          }
+
+          guard let http = response as? HTTPURLResponse else {
+            throw LoreServiceError.invalidResponse
+          }
+          guard (200..<300).contains(http.statusCode) else {
+            // Drain a small prefix for the error body so we can surface a
+            // useful message without hanging on a large payload.
+            var bodyBytes: [UInt8] = []
+            bodyBytes.reserveCapacity(512)
+            for try await byte in bytes {
+              bodyBytes.append(byte)
+              if bodyBytes.count >= 512 { break }
+            }
+            let body = String(decoding: bodyBytes, as: UTF8.self)
+            throw LoreServiceError.upstream(status: http.statusCode, body: body)
+          }
+
+          var yielded = false
+          let decoder = JSONDecoder()
+
+          for try await line in bytes.lines {
+            if Task.isCancelled { break }
+            // SSE frames: blank separators, comment lines (`: ping`), and
+            // `data: {json}` payloads. OpenRouter sends `data: [DONE]` last.
+            guard line.hasPrefix("data:") else { continue }
+            let payload = line.dropFirst("data:".count)
+              .trimmingCharacters(in: .whitespaces)
+            if payload.isEmpty { continue }
+            if payload == "[DONE]" { break }
+
+            guard let data = payload.data(using: .utf8) else { continue }
+            let chunk: StreamChunk
+            do {
+              chunk = try decoder.decode(StreamChunk.self, from: data)
+            } catch {
+              // One malformed chunk shouldn't kill the whole stream; keep
+              // going and let the caller notice if nothing arrives.
+              continue
+            }
+
+            if let delta = chunk.choices.first?.delta.content, !delta.isEmpty {
+              yielded = true
+              continuation.yield(delta)
+            }
+          }
+
+          if !yielded {
+            throw LoreServiceError.invalidResponse
+          }
+
+          continuation.finish()
+        } catch {
+          continuation.finish(throwing: error)
+        }
+      }
+
+      continuation.onTermination = { _ in
+        task.cancel()
+      }
+    }
+  }
+
+  // MARK: - Request builders
+
+  private func makeBaseRequest(apiKey: String) throws -> URLRequest {
+    var request = URLRequest(url: LoreConfig.openRouterBaseURL)
+    request.httpMethod = "POST"
+    request.addValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+    request.addValue("application/json", forHTTPHeaderField: "Content-Type")
+    request.addValue(LoreConfig.httpReferer, forHTTPHeaderField: "HTTP-Referer")
+    request.addValue(LoreConfig.appTitle, forHTTPHeaderField: "X-Title")
+    return request
+  }
+
+  private func makePayload(jpegData: Data, stream: Bool) -> ChatRequest {
+    let dataURL = "data:image/jpeg;base64,\(jpegData.base64EncodedString())"
+    return ChatRequest(
+      model: modelProvider(),
+      messages: [
+        .init(role: "system", content: .text(LoreConfig.systemPrompt)),
+        .init(role: "user", content: .multipart([
+          .text(LoreConfig.userPrompt),
+          .imageURL(dataURL),
+        ])),
+      ],
+      max_tokens: LoreConfig.maxOutputTokens,
+      stream: stream
+    )
+  }
 }
 
 // MARK: - Wire types (OpenAI-compatible via OpenRouter)
@@ -100,6 +199,10 @@ private struct ChatRequest: Encodable {
   let model: String
   let messages: [Message]
   let max_tokens: Int
+  // Optional so the non-streaming path serializes identically to before —
+  // nil is omitted by the default encoder and older regression tests keep
+  // their exact wire bytes.
+  var stream: Bool?
 
   struct Message: Encodable {
     let role: String
@@ -144,6 +247,20 @@ private struct ChatRequest: Encodable {
         case type, text, image_url
       }
     }
+  }
+}
+
+// SSE chunks from OpenRouter (OpenAI-compatible). Each frame's `choices[0].delta`
+// carries either a role announcement or a content token. We only care about content.
+private struct StreamChunk: Decodable {
+  let choices: [Choice]
+
+  struct Choice: Decodable {
+    let delta: Delta
+  }
+
+  struct Delta: Decodable {
+    let content: String?
   }
 }
 
