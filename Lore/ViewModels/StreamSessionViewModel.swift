@@ -44,6 +44,11 @@ final class StreamSessionViewModel: ObservableObject {
 
   // Lore pipeline state — exposed for the overlay UI
   @Published var loreState: LoreFlowState = .idle
+  /// True when the user can ask a follow-up ("Tell me more"). Flips on when
+  /// the initial lore finishes, stays on until max depth is reached or the
+  /// conversation is dismissed. Published so SwiftUI can show/hide the
+  /// button without the VM manually invalidating state.
+  @Published var canFollowUp: Bool = false
   let loreSpeaker = LoreSpeaker()
   let locationProvider = LoreLocationProvider()
 
@@ -71,6 +76,19 @@ final class StreamSessionViewModel: ObservableObject {
   /// video frame. Prevents `handlePhotoData` from re-running the pipeline
   /// when the high-resolution photo eventually arrives.
   private var loreStartedFromFrame: Bool = false
+
+  /// Running message history for the current capture. The first two
+  /// entries are the system prompt and the user's image turn; follow-ups
+  /// append alternating user/assistant text messages. Reset on each new
+  /// `runLorePipeline(with:)` call.
+  private var conversationHistory: [LoreMessage] = []
+  private var followUpCount: Int = 0
+  private static let maxFollowUps: Int = 3
+  /// Fixed text for a "Tell me more" follow-up. Kept short and directive —
+  /// the model already has the image + first answer in context, so we
+  /// don't need to re-explain the task.
+  private static let followUpPrompt =
+    "Tell me more. Go deeper — another angle, another detail most tourists miss. Stay in character."
 
   private var stateListenerToken: AnyListenerToken?
   private var videoFrameListenerToken: AnyListenerToken?
@@ -132,6 +150,9 @@ final class StreamSessionViewModel: ObservableObject {
     hasReceivedFirstFrame = false
     recentFrames.removeAll()
     loreStartedFromFrame = false
+    conversationHistory.removeAll()
+    followUpCount = 0
+    canFollowUp = false
     locationProvider.stop()
     await stream.stop()
   }
@@ -224,6 +245,9 @@ final class StreamSessionViewModel: ObservableObject {
     activeLoreTask = nil
     loreSpeaker.stop()
     loreState = .idle
+    conversationHistory.removeAll()
+    followUpCount = 0
+    canFollowUp = false
   }
 
   func retryLore() {
@@ -361,9 +385,30 @@ final class StreamSessionViewModel: ObservableObject {
   }
 
   private func runLorePipeline(with jpegData: Data) {
+    // Fresh conversation — reset history and follow-up depth. Any prior
+    // "Tell me more" chain belongs to the previous capture.
+    let systemPrompt = LoreSecrets.persona.systemPrompt(
+      contextLines: locationProvider.contextLines
+    )
+    conversationHistory = [
+      .system(systemPrompt),
+      .user(jpegData: jpegData, text: LoreConfig.userPrompt),
+    ]
+    followUpCount = 0
+    canFollowUp = false
+    runPipeline(messages: conversationHistory)
+  }
+
+  /// Kicks off the streaming/non-streaming pipeline for the current
+  /// `conversationHistory`. Used both for the initial capture and for
+  /// follow-up turns — the shape of the request is the same either way.
+  private func runPipeline(messages: [LoreMessage]) {
     activeLoreTask?.cancel()
     loreSpeaker.stop()
     loreState = .thinking
+    // Hide the follow-up affordance while a new turn is in-flight. It
+    // re-enables on completion if we haven't hit maxFollowUps.
+    canFollowUp = false
 
     // Prepare audio session up front so the first utterance doesn't pay the
     // category-activation latency. Failures here are logged but non-fatal —
@@ -374,18 +419,10 @@ final class StreamSessionViewModel: ObservableObject {
       NSLog("[Lore] Audio session setup failed: \(error)")
     }
 
-    // Build the system prompt once, here, from the currently-selected
-    // persona seeded with whatever location context we have. One place for
-    // "everything the model learns before it sees the image."
-    let systemPrompt = LoreSecrets.persona.systemPrompt(
-      contextLines: locationProvider.contextLines
-    )
-
     if LoreConfig.useStreaming {
       activeLoreTask = Task { [loreService, loreSpeaker] in
         await self.runStreamingPipeline(
-          jpegData: jpegData,
-          systemPrompt: systemPrompt,
+          messages: messages,
           loreService: loreService,
           loreSpeaker: loreSpeaker
         )
@@ -393,8 +430,7 @@ final class StreamSessionViewModel: ObservableObject {
     } else {
       activeLoreTask = Task { [loreService, loreSpeaker] in
         await self.runNonStreamingPipeline(
-          jpegData: jpegData,
-          systemPrompt: systemPrompt,
+          messages: messages,
           loreService: loreService,
           loreSpeaker: loreSpeaker
         )
@@ -402,11 +438,26 @@ final class StreamSessionViewModel: ObservableObject {
     }
   }
 
+  /// User tapped "Tell me more". Appends a follow-up user turn to the
+  /// history and re-runs the pipeline. No-op if `canFollowUp` is false
+  /// (i.e., no current lore, mid-stream, or max depth reached).
+  func askFollowUp() {
+    guard canFollowUp else { return }
+    guard followUpCount < Self.maxFollowUps else {
+      canFollowUp = false
+      return
+    }
+    // Any prior assistant response is already appended by the completion
+    // handlers below, so the history is ready to accept a user turn.
+    conversationHistory.append(.user(Self.followUpPrompt))
+    followUpCount += 1
+    runPipeline(messages: conversationHistory)
+  }
+
   /// SSE path. Starts TTS on the first full sentence, so time-to-first-word
   /// is driven by model latency, not model completion.
   private func runStreamingPipeline(
-    jpegData: Data,
-    systemPrompt: String,
+    messages: [LoreMessage],
     loreService: LoreService,
     loreSpeaker: LoreSpeaker
   ) async {
@@ -422,14 +473,12 @@ final class StreamSessionViewModel: ObservableObject {
         } else if case .thinking = self.loreState, !text.isEmpty {
           self.loreState = .finished(text)
         }
+        self.finalizeAssistantTurn(text: text)
       }
     }
 
     do {
-      for try await delta in loreService.streamLore(
-        forJPEG: jpegData,
-        systemPrompt: systemPrompt
-      ) {
+      for try await delta in loreService.streamLoreChat(messages: messages) {
         if Task.isCancelled { break }
         await transcript.append(delta)
         let running = await transcript.read()
@@ -462,16 +511,12 @@ final class StreamSessionViewModel: ObservableObject {
   /// Legacy one-shot path, kept behind `LoreConfig.useStreaming = false` so
   /// we can A/B if the SSE path misbehaves on a specific model.
   private func runNonStreamingPipeline(
-    jpegData: Data,
-    systemPrompt: String,
+    messages: [LoreMessage],
     loreService: LoreService,
     loreSpeaker: LoreSpeaker
   ) async {
     do {
-      let text = try await loreService.lore(
-        forJPEG: jpegData,
-        systemPrompt: systemPrompt
-      )
+      let text = try await loreService.loreChat(messages: messages)
       guard !Task.isCancelled else { return }
       await MainActor.run {
         self.loreState = .speaking(text)
@@ -482,6 +527,7 @@ final class StreamSessionViewModel: ObservableObject {
           if case .speaking(let current) = self.loreState {
             self.loreState = .finished(current)
           }
+          self.finalizeAssistantTurn(text: text)
         }
       }
     } catch is CancellationError {
@@ -493,6 +539,18 @@ final class StreamSessionViewModel: ObservableObject {
         self.loreState = .error(message)
       }
     }
+  }
+
+  /// Called once per turn after the assistant's response has fully
+  /// streamed (or the non-streaming call returned). Appends the assistant
+  /// message to `conversationHistory` and re-enables the follow-up button
+  /// if we're under the depth cap. Centralized here so the streaming +
+  /// non-streaming paths can't drift.
+  private func finalizeAssistantTurn(text: String) {
+    let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmed.isEmpty else { return }
+    conversationHistory.append(.assistant(trimmed))
+    canFollowUp = followUpCount < Self.maxFollowUps
   }
 
   private func showError(_ message: String) {

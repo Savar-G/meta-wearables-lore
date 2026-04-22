@@ -38,12 +38,25 @@ struct LoreService {
     self.modelProvider = modelProvider
   }
 
+  /// Convenience wrapper for a single-turn image capture. Builds a
+  /// [system, user(image+text)] message pair and delegates to
+  /// `loreChat(messages:)`.
   func lore(forJPEG jpegData: Data, systemPrompt: String) async throws -> String {
+    try await loreChat(messages: [
+      .system(systemPrompt),
+      .user(jpegData: jpegData, text: LoreConfig.userPrompt),
+    ])
+  }
+
+  /// Full-chat variant. Use this when you need to send a multi-turn
+  /// conversation (e.g., follow-ups after an initial capture). The VM is
+  /// responsible for maintaining the message history.
+  func loreChat(messages: [LoreMessage]) async throws -> String {
     guard let apiKey = apiKeyProvider() else { throw LoreServiceError.missingAPIKey }
 
     var request = try makeBaseRequest(apiKey: apiKey)
     request.httpBody = try JSONEncoder().encode(
-      makePayload(jpegData: jpegData, systemPrompt: systemPrompt, stream: false)
+      makePayload(messages: messages, stream: false)
     )
 
     let data: Data
@@ -82,9 +95,23 @@ struct LoreService {
   ///
   /// Errors are thrown through the stream's termination, so a caller that
   /// uses `for try await` will catch them naturally.
+  /// Convenience wrapper for single-turn image capture streaming. Builds a
+  /// [system, user(image+text)] pair and delegates to
+  /// `streamLoreChat(messages:)`.
   func streamLore(
     forJPEG jpegData: Data,
     systemPrompt: String
+  ) -> AsyncThrowingStream<String, Error> {
+    streamLoreChat(messages: [
+      .system(systemPrompt),
+      .user(jpegData: jpegData, text: LoreConfig.userPrompt),
+    ])
+  }
+
+  /// Full-chat streaming. Used for the initial capture AND for follow-ups —
+  /// the VM builds the message history and the service just serializes it.
+  func streamLoreChat(
+    messages: [LoreMessage]
   ) -> AsyncThrowingStream<String, Error> {
     AsyncThrowingStream { continuation in
       let task = Task {
@@ -96,7 +123,7 @@ struct LoreService {
           var request = try makeBaseRequest(apiKey: apiKey)
           request.addValue("text/event-stream", forHTTPHeaderField: "Accept")
           request.httpBody = try JSONEncoder().encode(
-            makePayload(jpegData: jpegData, systemPrompt: systemPrompt, stream: true)
+            makePayload(messages: messages, stream: true)
           )
 
           let (bytes, response): (URLSession.AsyncBytes, URLResponse)
@@ -179,24 +206,33 @@ struct LoreService {
     return request
   }
 
-  private func makePayload(
-    jpegData: Data,
-    systemPrompt: String,
-    stream: Bool
-  ) -> ChatRequest {
-    let dataURL = "data:image/jpeg;base64,\(jpegData.base64EncodedString())"
-    return ChatRequest(
+  private func makePayload(messages: [LoreMessage], stream: Bool) -> ChatRequest {
+    ChatRequest(
       model: modelProvider(),
-      messages: [
-        .init(role: "system", content: .text(systemPrompt)),
-        .init(role: "user", content: .multipart([
-          .text(LoreConfig.userPrompt),
-          .imageURL(dataURL),
-        ])),
-      ],
+      messages: messages.map { $0.toWireMessage() },
       max_tokens: LoreConfig.maxOutputTokens,
       stream: stream
     )
+  }
+}
+
+// MARK: - LoreMessage ↔ wire conversion
+
+fileprivate extension LoreMessage {
+  func toWireMessage() -> ChatRequest.Message {
+    switch content {
+    case .text(let string):
+      return ChatRequest.Message(role: role.rawValue, content: .text(string))
+    case .imageAndText(let jpegData, let text):
+      let dataURL = "data:image/jpeg;base64,\(jpegData.base64EncodedString())"
+      return ChatRequest.Message(
+        role: role.rawValue,
+        content: .multipart([
+          .text(text),
+          .imageURL(dataURL),
+        ])
+      )
+    }
   }
 }
 
