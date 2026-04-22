@@ -143,21 +143,35 @@ final class StreamSessionViewModel: ObservableObject {
     guard let deviceSession = await sessionManager.getSession() else { return }
     guard deviceSession.state == .started else { return }
 
-    // Stream-quality tuning notes:
-    // - .raw is uncompressed and bandwidth-bound, so it forces a low pixel
-    //   count over Bluetooth. .hvc1 (HEVC) compresses far more efficiently,
-    //   which unlocks higher resolutions on the same link.
-    // - .high is what the sample apps use for the crisp 720p-ish preview.
-    //   Fall back to .medium if a specific device rejects .high.
-    // - 30fps matches the glasses' native capture cadence and keeps motion
-    //   smooth without doubling the bitrate vs. 60.
+    // Stream-quality tuning notes (see .claude/skills/camera-streaming.md):
+    // - Resolution enum: .high 720x1280, .medium 504x896, .low 360x640.
+    // - Valid frame rates: 2, 7, 15, 24, 30.
+    // - The SDK auto-downgrades resolution (then frame rate) when the BT
+    //   link can't sustain the request. So "request lower settings for
+    //   higher per-frame quality" — .medium is a sweet spot: 2x the pixels
+    //   of .low without triggering aggressive BT compression.
+    // - Codec: stick to .raw. VideoFrame.makeUIImage() is built for the raw
+    //   path; .hvc1 ships HEVC-encoded CMSampleBuffers that the helper
+    //   doesn't decode, which produced a black preview in testing.
     let config = StreamSessionConfig(
-      videoCodec: VideoCodec.hvc1,
-      resolution: StreamingResolution.high,
-      frameRate: 30
+      videoCodec: VideoCodec.raw,
+      resolution: StreamingResolution.medium,
+      frameRate: 24
     )
 
-    guard let stream = try? deviceSession.addStream(config: config) else { return }
+    let stream: StreamSession?
+    do {
+      stream = try deviceSession.addStream(config: config)
+    } catch {
+      NSLog("[Lore] addStream failed: \(error)")
+      showError("Could not start stream: \(error.localizedDescription)")
+      return
+    }
+    guard let stream else {
+      NSLog("[Lore] addStream returned nil for config \(config)")
+      showError("Stream unavailable for this device. Try reconnecting.")
+      return
+    }
     streamSession = stream
     streamingStatus = .waiting
     setupListeners(for: stream)
