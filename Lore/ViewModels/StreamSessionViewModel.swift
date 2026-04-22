@@ -143,10 +143,18 @@ final class StreamSessionViewModel: ObservableObject {
     guard let deviceSession = await sessionManager.getSession() else { return }
     guard deviceSession.state == .started else { return }
 
+    // Stream-quality tuning notes:
+    // - .raw is uncompressed and bandwidth-bound, so it forces a low pixel
+    //   count over Bluetooth. .hvc1 (HEVC) compresses far more efficiently,
+    //   which unlocks higher resolutions on the same link.
+    // - .high is what the sample apps use for the crisp 720p-ish preview.
+    //   Fall back to .medium if a specific device rejects .high.
+    // - 30fps matches the glasses' native capture cadence and keeps motion
+    //   smooth without doubling the bitrate vs. 60.
     let config = StreamSessionConfig(
-      videoCodec: VideoCodec.raw,
-      resolution: StreamingResolution.low,
-      frameRate: 24
+      videoCodec: VideoCodec.hvc1,
+      resolution: StreamingResolution.high,
+      frameRate: 30
     )
 
     guard let stream = try? deviceSession.addStream(config: config) else { return }
