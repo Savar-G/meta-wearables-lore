@@ -3,13 +3,14 @@ import Foundation
 enum LoreConfig {
   static let openRouterBaseURL = URL(string: "https://openrouter.ai/api/v1/chat/completions")!
 
-  static let defaultModel = "anthropic/claude-sonnet-4.6"
+  static let defaultModel = "qwen/qwen3.6-plus"
 
   static let availableModels: [String] = [
     "anthropic/claude-opus-4.7",
     "anthropic/claude-sonnet-4.6",
     "anthropic/claude-haiku-4.5",
     "openai/gpt-4o",
+    "qwen/qwen3.6-plus",
     "google/gemini-2.5-pro",
     "google/gemini-2.5-flash",
   ]
