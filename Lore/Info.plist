@@ -74,6 +74,8 @@
 	<string>This app needs access to save photos captured from your glasses.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>This app needs camera access to stream from your phone's camera as a mock device feed.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Lore uses your location to ground its stories in where you actually are — the city, the neighborhood, the landmark across the street.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

@@ -45,6 +45,7 @@ final class StreamSessionViewModel: ObservableObject {
   // Lore pipeline state — exposed for the overlay UI
   @Published var loreState: LoreFlowState = .idle
   let loreSpeaker = LoreSpeaker()
+  let locationProvider = LoreLocationProvider()
 
   var isStreaming: Bool { streamingStatus != .stopped }
 
@@ -109,6 +110,10 @@ final class StreamSessionViewModel: ObservableObject {
         showError("Permission denied")
         return
       }
+      // Fire location off in parallel with the SDK start. This is a soft
+      // ask — if the user denies, the pipeline still works, just without
+      // place-grounded context lines. We don't block streaming on it.
+      locationProvider.start()
       await startSession()
     } catch {
       showError("Permission error: \(error.description)")
@@ -127,6 +132,7 @@ final class StreamSessionViewModel: ObservableObject {
     hasReceivedFirstFrame = false
     recentFrames.removeAll()
     loreStartedFromFrame = false
+    locationProvider.stop()
     await stream.stop()
   }
 
@@ -369,10 +375,11 @@ final class StreamSessionViewModel: ObservableObject {
     }
 
     // Build the system prompt once, here, from the currently-selected
-    // persona. Phase 2 Commit 2 will slot reverse-geocoded context lines
-    // into this call — a single place for "everything the model learns
-    // before it sees the image."
-    let systemPrompt = LoreSecrets.persona.systemPrompt()
+    // persona seeded with whatever location context we have. One place for
+    // "everything the model learns before it sees the image."
+    let systemPrompt = LoreSecrets.persona.systemPrompt(
+      contextLines: locationProvider.contextLines
+    )
 
     if LoreConfig.useStreaming {
       activeLoreTask = Task { [loreService, loreSpeaker] in
