@@ -98,11 +98,16 @@ struct LoreOverlayView: View {
   }
 
   private func errorBubble(message: String) -> some View {
-    VStack(alignment: .leading, spacing: 8) {
+    // Recognize the "You're offline" copy emitted by
+    // LoreServiceError.transport and swap in a more readable icon + header.
+    // This is a cosmetic sniff, not a protocol change — worst case we fall
+    // back to the generic warning.
+    let offline = message.lowercased().hasPrefix("you're offline")
+    return VStack(alignment: .leading, spacing: 8) {
       HStack(spacing: 8) {
-        Image(systemName: "exclamationmark.triangle.fill")
-          .foregroundColor(.yellow)
-        Text("Lore failed")
+        Image(systemName: offline ? "wifi.slash" : "exclamationmark.triangle.fill")
+          .foregroundColor(offline ? .white : .yellow)
+        Text(offline ? "Offline" : "Lore failed")
           .font(.caption.weight(.semibold))
           .foregroundColor(.white)
         Spacer()

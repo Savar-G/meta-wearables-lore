@@ -320,6 +320,7 @@ struct JournalEntryDetailView: View {
 
   @StateObject private var speaker = LoreSpeaker()
   @State private var isReplaying: Bool = false
+  @State private var shareImage: UIImage?
 
   var body: some View {
     ScrollView {
@@ -361,25 +362,51 @@ struct JournalEntryDetailView: View {
           .padding(.top, 4)
         }
 
-        Button {
-          if isReplaying {
-            speaker.stop()
-            isReplaying = false
-          } else {
-            replay()
+        HStack(spacing: 12) {
+          Button {
+            if isReplaying {
+              speaker.stop()
+              isReplaying = false
+            } else {
+              replay()
+            }
+          } label: {
+            HStack(spacing: 8) {
+              Image(systemName: isReplaying ? "stop.fill" : "play.fill")
+              Text(isReplaying ? "Stop" : "Replay")
+                .font(.body.weight(.semibold))
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 12)
+            .background(RoundedRectangle(cornerRadius: 12).fill(Color.accentColor))
+            .foregroundColor(.white)
           }
-        } label: {
-          HStack(spacing: 8) {
-            Image(systemName: isReplaying ? "stop.fill" : "play.fill")
-            Text(isReplaying ? "Stop" : "Replay")
-              .font(.body.weight(.semibold))
+          .buttonStyle(.plain)
+
+          Button {
+            // Rendering can take a few hundred ms on the main actor —
+            // kick to the next run loop so the button's pressed-state
+            // animation fires before the share sheet hops in. Feels
+            // snappier than a dead button while UIKit works.
+            Task { @MainActor in
+              shareImage = LoreShareCardRenderer.makeImage(for: entry)
+            }
+          } label: {
+            HStack(spacing: 8) {
+              Image(systemName: "square.and.arrow.up")
+              Text("Share")
+                .font(.body.weight(.semibold))
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 12)
+            .background(
+              RoundedRectangle(cornerRadius: 12)
+                .strokeBorder(Color.accentColor, lineWidth: 1.5)
+            )
+            .foregroundColor(.accentColor)
           }
-          .frame(maxWidth: .infinity)
-          .padding(.vertical, 12)
-          .background(RoundedRectangle(cornerRadius: 12).fill(Color.accentColor))
-          .foregroundColor(.white)
+          .buttonStyle(.plain)
         }
-        .buttonStyle(.plain)
 
         Spacer(minLength: 0)
       }
@@ -387,6 +414,20 @@ struct JournalEntryDetailView: View {
     }
     .navigationTitle("Entry")
     .navigationBarTitleDisplayMode(.inline)
+    .sheet(item: Binding(
+      get: { shareImage.map { ShareImage(image: $0) } },
+      set: { if $0 == nil { shareImage = nil } }
+    )) { wrapper in
+      ShareSheet(items: [wrapper.image])
+    }
+  }
+
+  /// Identifiable wrapper so `sheet(item:)` can diff-present when the
+  /// rendered image is ready. Without this we'd need a separate
+  /// `@State var isSharing: Bool` and race the image being nil on open.
+  private struct ShareImage: Identifiable {
+    let id = UUID()
+    let image: UIImage
   }
 
   private var fullPlacemarkLines: [String]? {
@@ -410,6 +451,16 @@ struct JournalEntryDetailView: View {
       try speaker.prepareAudioSession()
     } catch {
       NSLog("[Lore] Replay audio session setup failed: \(error)")
+    }
+    // Pick the language the entry was originally in so we don't try to
+    // speak Japanese transcripts with an en-US voice. Entries from before
+    // the language picker shipped have languageCode == nil; those fall
+    // through to the speaker's default (English) which is the only voice
+    // they were ever spoken with.
+    if let code = entry.languageCode,
+      let language = LoreLanguage.allCases.first(where: { $0.voiceCode == code })
+    {
+      speaker.setLanguage(language)
     }
     isReplaying = true
     speaker.speak(entry.transcript) {

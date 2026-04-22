@@ -5,6 +5,7 @@ enum LoreSecrets {
   private static let apiKeyDefaultsKey = "lore.openRouterAPIKey"
   private static let modelDefaultsKey = "lore.openRouterModel"
   private static let personaDefaultsKey = "lore.persona"
+  private static let languageDefaultsKey = "lore.language"
 
   static var apiKey: String? {
     get {
@@ -39,6 +40,24 @@ enum LoreSecrets {
     }
     set {
       UserDefaults.standard.set(newValue.rawValue, forKey: personaDefaultsKey)
+    }
+  }
+
+  /// Output language for lore responses and TTS. Defaults to English.
+  /// Changing this mid-session affects the NEXT capture; the current lore
+  /// finishes in whatever language it started.
+  static var language: LoreLanguage {
+    get {
+      guard
+        let raw = UserDefaults.standard.string(forKey: languageDefaultsKey),
+        let value = LoreLanguage(rawValue: raw)
+      else {
+        return .english
+      }
+      return value
+    }
+    set {
+      UserDefaults.standard.set(newValue.rawValue, forKey: languageDefaultsKey)
     }
   }
 

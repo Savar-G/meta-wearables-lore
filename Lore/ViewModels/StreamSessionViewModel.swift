@@ -405,7 +405,14 @@ final class StreamSessionViewModel: ObservableObject {
     // "avoid repeating yourself" guidance.
     let memoryLines = journalStore?.memoryContextLines(limit: 3) ?? []
     let contextLines = locationProvider.contextLines + memoryLines
-    let systemPrompt = LoreSecrets.persona.systemPrompt(contextLines: contextLines)
+    let language = LoreSecrets.language
+    // The speaker needs the language BEFORE the first token arrives so
+    // utterance voices are correct. Idempotent.
+    loreSpeaker.setLanguage(language)
+    let systemPrompt = LoreSecrets.persona.systemPrompt(
+      contextLines: contextLines,
+      language: language
+    )
     conversationHistory = [
       .system(systemPrompt),
       .user(jpegData: jpegData, text: LoreConfig.userPrompt),
@@ -577,7 +584,7 @@ final class StreamSessionViewModel: ObservableObject {
       store.save(
         transcript: trimmed,
         persona: LoreSecrets.persona,
-        languageCode: nil,  // Populated in Phase 4 once language picker lands.
+        languageCode: LoreSecrets.language.voiceCode,
         photoJPEG: photo,
         placemark: locationProvider.placemark
       )
