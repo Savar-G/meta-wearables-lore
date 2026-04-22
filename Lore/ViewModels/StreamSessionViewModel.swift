@@ -52,6 +52,12 @@ final class StreamSessionViewModel: ObservableObject {
   let loreSpeaker = LoreSpeaker()
   let locationProvider = LoreLocationProvider()
 
+  /// Journal persistence. Optional because the VM is constructed before
+  /// SwiftData's ModelContext is available in the view hierarchy — the
+  /// view attaches this in `.task`. Nil means "running without journal"
+  /// (e.g., unit tests) and `finalizeAssistantTurn` simply won't save.
+  var journalStore: JournalStore?
+
   var isStreaming: Bool { streamingStatus != .stopped }
 
   // MARK: - Private
@@ -543,14 +549,29 @@ final class StreamSessionViewModel: ObservableObject {
 
   /// Called once per turn after the assistant's response has fully
   /// streamed (or the non-streaming call returned). Appends the assistant
-  /// message to `conversationHistory` and re-enables the follow-up button
-  /// if we're under the depth cap. Centralized here so the streaming +
-  /// non-streaming paths can't drift.
+  /// message to `conversationHistory`, persists the capture on the first
+  /// turn, and re-enables the follow-up button if we're under the depth
+  /// cap. Centralized here so the streaming + non-streaming paths can't
+  /// drift.
   private func finalizeAssistantTurn(text: String) {
     let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !trimmed.isEmpty else { return }
     conversationHistory.append(.assistant(trimmed))
     canFollowUp = followUpCount < Self.maxFollowUps
+
+    // Only persist on the FIRST assistant turn. Follow-ups are the same
+    // story from another angle; they shouldn't spawn new journal entries.
+    // `followUpCount` is incremented BEFORE the follow-up pipeline runs,
+    // so the first response always sees it as 0.
+    if followUpCount == 0, let store = journalStore, let photo = lastPhotoData {
+      store.save(
+        transcript: trimmed,
+        persona: LoreSecrets.persona,
+        languageCode: nil,  // Populated in Phase 4 once language picker lands.
+        photoJPEG: photo,
+        placemark: locationProvider.placemark
+      )
+    }
   }
 
   private func showError(_ message: String) {

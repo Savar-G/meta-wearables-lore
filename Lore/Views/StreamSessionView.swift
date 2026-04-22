@@ -12,12 +12,17 @@
 //
 
 import MWDATCore
+import SwiftData
 import SwiftUI
 
 struct StreamSessionView: View {
   let wearables: WearablesInterface
   @ObservedObject private var wearablesViewModel: WearablesViewModel
   @StateObject private var viewModel: StreamSessionViewModel
+  /// SwiftData's shared context, injected by `.modelContainer(...)` in
+  /// LoreApp. Used to lazily attach a JournalStore to the VM so each
+  /// capture gets persisted.
+  @Environment(\.modelContext) private var modelContext
 
   init(wearables: WearablesInterface, wearablesVM: WearablesViewModel) {
     self.wearables = wearables
@@ -33,6 +38,13 @@ struct StreamSessionView: View {
       } else {
         // Pre-streaming setup view with permissions and start button
         NonStreamView(viewModel: viewModel, wearablesVM: wearablesViewModel)
+      }
+    }
+    .task {
+      // Idempotent. The VM keeps the store reference once attached so
+      // subsequent view rebuilds don't wipe in-flight work.
+      if viewModel.journalStore == nil {
+        viewModel.journalStore = JournalStore(context: modelContext)
       }
     }
     .alert("Error", isPresented: $viewModel.showError) {
