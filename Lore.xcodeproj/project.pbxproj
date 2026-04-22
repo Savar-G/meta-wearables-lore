@@ -12,6 +12,9 @@
 		1A10000000000000000000A7 /* LoreService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A10000000000000000000A6 /* LoreService.swift */; };
 		1A10000000000000000000A9 /* LoreSpeaker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A10000000000000000000A8 /* LoreSpeaker.swift */; };
 		1A10000000000000000000AB /* FrameSharpness.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A10000000000000000000AA /* FrameSharpness.swift */; };
+		1A10000000000000000000AD /* LorePersona.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A10000000000000000000AC /* LorePersona.swift */; };
+		1A10000000000000000000AF /* LoreLocationProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A10000000000000000000AE /* LoreLocationProvider.swift */; };
+		1A1000000000000000000B5A /* LoreMessage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A1000000000000000000B59 /* LoreMessage.swift */; };
 		1A10000000000000000000B1 /* LoreSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A10000000000000000000B0 /* LoreSettingsView.swift */; };
 		1A10000000000000000000B3 /* LoreOverlayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A10000000000000000000B2 /* LoreOverlayView.swift */; };
 		8F2D23802E856711002D0588 /* DebugMenuViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F2D237F2E856711002D0588 /* DebugMenuViewModel.swift */; };
@@ -80,6 +83,9 @@
 		1A10000000000000000000A6 /* LoreService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoreService.swift; sourceTree = "<group>"; };
 		1A10000000000000000000A8 /* LoreSpeaker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoreSpeaker.swift; sourceTree = "<group>"; };
 		1A10000000000000000000AA /* FrameSharpness.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FrameSharpness.swift; sourceTree = "<group>"; };
+		1A10000000000000000000AC /* LorePersona.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LorePersona.swift; sourceTree = "<group>"; };
+		1A10000000000000000000AE /* LoreLocationProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoreLocationProvider.swift; sourceTree = "<group>"; };
+		1A1000000000000000000B59 /* LoreMessage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoreMessage.swift; sourceTree = "<group>"; };
 		1A10000000000000000000B0 /* LoreSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoreSettingsView.swift; sourceTree = "<group>"; };
 		1A10000000000000000000B2 /* LoreOverlayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoreOverlayView.swift; sourceTree = "<group>"; };
 		3A3A3A3A3A3A3A3A3A3A3A3A /* Lore.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Lore.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -144,10 +150,13 @@
 			isa = PBXGroup;
 			children = (
 				1A10000000000000000000A2 /* LoreConfig.swift */,
+				1A10000000000000000000AC /* LorePersona.swift */,
+				1A1000000000000000000B59 /* LoreMessage.swift */,
 				1A10000000000000000000A4 /* LoreSecrets.swift */,
 				1A10000000000000000000A6 /* LoreService.swift */,
 				1A10000000000000000000A8 /* LoreSpeaker.swift */,
 				1A10000000000000000000AA /* FrameSharpness.swift */,
+				1A10000000000000000000AE /* LoreLocationProvider.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -436,6 +445,9 @@
 				1A10000000000000000000A7 /* LoreService.swift in Sources */,
 				1A10000000000000000000A9 /* LoreSpeaker.swift in Sources */,
 				1A10000000000000000000AB /* FrameSharpness.swift in Sources */,
+				1A10000000000000000000AD /* LorePersona.swift in Sources */,
+				1A10000000000000000000AF /* LoreLocationProvider.swift in Sources */,
+				1A1000000000000000000B5A /* LoreMessage.swift in Sources */,
 				1A10000000000000000000B1 /* LoreSettingsView.swift in Sources */,
 				1A10000000000000000000B3 /* LoreOverlayView.swift in Sources */,
 			);

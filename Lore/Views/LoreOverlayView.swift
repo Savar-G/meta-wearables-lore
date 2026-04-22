@@ -2,8 +2,14 @@ import SwiftUI
 
 struct LoreOverlayView: View {
   let state: LoreFlowState
+  /// True when the parent VM is ready to accept a "Tell me more" turn.
+  /// The overlay shows the follow-up button only in `.finished` state AND
+  /// only when this flag is on — so it disappears mid-stream, after
+  /// dismissal, and once max depth is hit.
+  let canFollowUp: Bool
   let onDismiss: () -> Void
   let onRetry: () -> Void
+  let onFollowUp: () -> Void
 
   var body: some View {
     Group {
@@ -15,9 +21,9 @@ struct LoreOverlayView: View {
       case .thinking:
         statusBubble(icon: "sparkles", label: "Looking up the lore…", showsSpinner: true)
       case .speaking(let text):
-        loreBubble(text: text, isSpeaking: true)
+        loreBubble(text: text, isSpeaking: true, showsFollowUp: false)
       case .finished(let text):
-        loreBubble(text: text, isSpeaking: false)
+        loreBubble(text: text, isSpeaking: false, showsFollowUp: canFollowUp)
       case .error(let message):
         errorBubble(message: message)
       }
@@ -42,7 +48,11 @@ struct LoreOverlayView: View {
     .transition(.opacity)
   }
 
-  private func loreBubble(text: String, isSpeaking: Bool) -> some View {
+  private func loreBubble(
+    text: String,
+    isSpeaking: Bool,
+    showsFollowUp: Bool
+  ) -> some View {
     VStack(alignment: .leading, spacing: 8) {
       HStack(spacing: 8) {
         Image(systemName: isSpeaking ? "speaker.wave.2.fill" : "speaker.wave.2")
@@ -63,6 +73,23 @@ struct LoreOverlayView: View {
         .font(.body)
         .foregroundColor(.white)
         .fixedSize(horizontal: false, vertical: true)
+      if showsFollowUp {
+        Button {
+          onFollowUp()
+        } label: {
+          HStack(spacing: 6) {
+            Image(systemName: "sparkle.magnifyingglass")
+            Text("Tell me more")
+              .font(.callout.weight(.semibold))
+          }
+          .padding(.horizontal, 14)
+          .padding(.vertical, 8)
+          .background(Capsule().fill(Color.white.opacity(0.18)))
+          .foregroundColor(.white)
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("follow_up_button")
+      }
     }
     .padding(16)
     .background(RoundedRectangle(cornerRadius: 16).fill(Color.black.opacity(0.78)))

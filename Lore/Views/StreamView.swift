@@ -69,8 +69,10 @@ struct StreamView: View {
         Spacer()
         LoreOverlayView(
           state: viewModel.loreState,
+          canFollowUp: viewModel.canFollowUp,
           onDismiss: { viewModel.dismissLore() },
-          onRetry: { viewModel.retryLore() }
+          onRetry: { viewModel.retryLore() },
+          onFollowUp: { viewModel.askFollowUp() }
         )
         ControlsView(viewModel: viewModel)
       }
