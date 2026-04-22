@@ -393,9 +393,19 @@ final class StreamSessionViewModel: ObservableObject {
   private func runLorePipeline(with jpegData: Data) {
     // Fresh conversation — reset history and follow-up depth. Any prior
     // "Tell me more" chain belongs to the previous capture.
-    let systemPrompt = LoreSecrets.persona.systemPrompt(
-      contextLines: locationProvider.contextLines
-    )
+    //
+    // The system prompt is layered in one place:
+    //   persona rules
+    //   + location context lines (where we are)
+    //   + journal memory context lines (what we already told on this trip)
+    //
+    // Order matters for readability, not correctness — the model gets the
+    // whole string and decides what to use. Location first because it's
+    // the more reliable signal; memory second because it's optional
+    // "avoid repeating yourself" guidance.
+    let memoryLines = journalStore?.memoryContextLines(limit: 3) ?? []
+    let contextLines = locationProvider.contextLines + memoryLines
+    let systemPrompt = LoreSecrets.persona.systemPrompt(contextLines: contextLines)
     conversationHistory = [
       .system(systemPrompt),
       .user(jpegData: jpegData, text: LoreConfig.userPrompt),
