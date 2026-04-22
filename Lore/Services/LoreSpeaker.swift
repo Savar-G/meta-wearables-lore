@@ -15,12 +15,17 @@ final class LoreSpeaker: NSObject, ObservableObject {
 
   /// Configure AVAudioSession so playback routes through Bluetooth A2DP
   /// (i.e. glasses speakers when connected). Idempotent.
+  ///
+  /// We intentionally do NOT enable HFP (`.allowBluetoothHFP`, formerly
+  /// `.allowBluetooth`). HFP is narrow-band phone-call quality; we want
+  /// stereo media playback via A2DP only. With `.playback` + A2DP, iOS
+  /// routes to the glasses speakers whenever they're the active BT route.
   func prepareAudioSession() throws {
     let session = AVAudioSession.sharedInstance()
     try session.setCategory(
       .playback,
       mode: .spokenAudio,
-      options: [.allowBluetooth, .allowBluetoothA2DP, .duckOthers]
+      options: [.allowBluetoothA2DP, .duckOthers]
     )
     try session.setActive(true, options: .notifyOthersOnDeactivation)
   }
