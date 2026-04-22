@@ -58,6 +58,19 @@ final class StreamSessionViewModel: ObservableObject {
   private var lastPhotoData: Data?
   private var activeLoreTask: Task<Void, Never>?
 
+  /// Ring buffer of the most-recent video frames. On capture, we score
+  /// these with `FrameSharpness` and send the sharpest into the lore
+  /// pipeline immediately — the glasses' `capturePhoto()` roundtrip can
+  /// add 400-1000ms of latency we don't actually need for the vision
+  /// model (which resizes to ~1024px internally anyway).
+  private var recentFrames: [UIImage] = []
+  private static let recentFramesCapacity = 5
+
+  /// True once we've kicked off lore for the current capture from a
+  /// video frame. Prevents `handlePhotoData` from re-running the pipeline
+  /// when the high-resolution photo eventually arrives.
+  private var loreStartedFromFrame: Bool = false
+
   private var stateListenerToken: AnyListenerToken?
   private var videoFrameListenerToken: AnyListenerToken?
   private var errorListenerToken: AnyListenerToken?
@@ -112,6 +125,8 @@ final class StreamSessionViewModel: ObservableObject {
     streamingStatus = .stopped
     currentVideoFrame = nil
     hasReceivedFirstFrame = false
+    recentFrames.removeAll()
+    loreStartedFromFrame = false
     await stream.stop()
   }
 
@@ -142,6 +157,7 @@ final class StreamSessionViewModel: ObservableObject {
     }
 
     isCapturingPhoto = true
+    loreStartedFromFrame = false
     let accepted = session.capturePhoto(format: .jpeg)
     if !accepted {
       NSLog("[Lore] capturePhoto(format: .jpeg) returned false")
@@ -150,6 +166,19 @@ final class StreamSessionViewModel: ObservableObject {
         "The glasses refused the capture request. This is usually low storage on the device or a transient hardware hiccup — try again."
       showPhotoCaptureError = true
       return
+    }
+
+    // Kick off lore immediately against the sharpest recent video frame.
+    // This buys us the ~400-1000ms the glasses would otherwise spend
+    // capturing + uploading the full-res JPEG. The high-res photo still
+    // arrives via `photoDataPublisher` and gets stored for the journal,
+    // but it doesn't re-trigger the pipeline (see handlePhotoData).
+    if let frameJPEG = bestRecentFrameJPEG() {
+      loreStartedFromFrame = true
+      lastPhotoData = frameJPEG  // Seed retry in case real photo fails to arrive.
+      runLorePipeline(with: frameJPEG)
+    } else {
+      NSLog("[Lore] No recent frames available; waiting for capturePhoto roundtrip")
     }
 
     startCaptureTimeout()
@@ -283,7 +312,21 @@ final class StreamSessionViewModel: ObservableObject {
       if !hasReceivedFirstFrame {
         hasReceivedFirstFrame = true
       }
+      recentFrames.append(image)
+      if recentFrames.count > Self.recentFramesCapacity {
+        recentFrames.removeFirst(recentFrames.count - Self.recentFramesCapacity)
+      }
     }
+  }
+
+  /// Pick the sharpest frame in the ring buffer and encode as JPEG.
+  /// Returns nil if the buffer is empty or encoding fails.
+  private func bestRecentFrameJPEG() -> Data? {
+    guard !recentFrames.isEmpty else { return nil }
+    let best = recentFrames.max { lhs, rhs in
+      FrameSharpness.score(lhs) < FrameSharpness.score(rhs)
+    } ?? recentFrames.last
+    return best?.jpegData(compressionQuality: 0.85)
   }
 
   private func handleError(_ error: StreamSessionError) {
@@ -298,7 +341,16 @@ final class StreamSessionViewModel: ObservableObject {
     captureTimeoutTask = nil
     isCapturingPhoto = false
     capturedPhoto = UIImage(data: data.data)
+    // Upgrade the retry source to the full-res photo now that it's here.
     lastPhotoData = data.data
+
+    // If we already started lore from a video frame, don't restart —
+    // that would cancel the in-flight response and double the latency.
+    // The full-res photo is kept for any later journaling / retry.
+    if loreStartedFromFrame {
+      loreStartedFromFrame = false
+      return
+    }
     runLorePipeline(with: data.data)
   }
 
