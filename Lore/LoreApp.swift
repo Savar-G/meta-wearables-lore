@@ -17,6 +17,7 @@
 
 import Foundation
 import MWDATCore
+import SwiftData
 import SwiftUI
 
 #if DEBUG
@@ -31,6 +32,20 @@ struct LoreApp: App {
   #endif
   private let wearables: WearablesInterface
   @StateObject private var wearablesViewModel: WearablesViewModel
+
+  /// Shared SwiftData container for the Journal. Built once at launch so
+  /// every view reads from the same store. Failure is fatal — if we can't
+  /// persist captures, the Journal feature is effectively gone and users
+  /// would lose work silently. Better to crash loud and fix it.
+  private let modelContainer: ModelContainer = {
+    let schema = Schema([JournalEntry.self, Trip.self])
+    let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
+    do {
+      return try ModelContainer(for: schema, configurations: config)
+    } catch {
+      fatalError("[Lore] Failed to build ModelContainer: \(error)")
+    }
+  }()
 
   init() {
     do {
@@ -72,6 +87,7 @@ struct LoreApp: App {
       // Main app view with access to the shared Wearables SDK instance
       // The Wearables.shared singleton provides the core DAT API
       MainAppView(wearables: Wearables.shared, viewModel: wearablesViewModel)
+        .modelContainer(modelContainer)
         // Show error alerts for view model failures
         .alert("Error", isPresented: $wearablesViewModel.showError) {
           Button("OK") {
